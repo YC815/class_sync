@@ -75,7 +75,7 @@ export default function ScheduleTable({
     return (
       <div className="flex items-center gap-1">
         <span className="text-sm font-medium">{displayName}</span>
-        {(cell.url || course?.defaultUrl) && (
+        {(cell.url || course?.links?.length) && (
           <Link className="w-3 h-3 text-blue-500" />
         )}
       </div>
@@ -102,7 +102,7 @@ export default function ScheduleTable({
       updateCell(day, period, {
         courseId: course.id,
         courseName: course.name,
-        url: course.defaultUrl,
+        url: course.links?.[0]?.url,
         base: undefined, // 重設基地選擇
         room: undefined  // 重設教室選擇
       })

@@ -12,9 +12,10 @@ import {
   DialogTitle,
   DialogTrigger,
 } from '@/components/ui/dialog'
-import { Badge } from '@/components/ui/badge'
 import { Plus, Edit2, Trash2, Link, Save, X } from 'lucide-react'
-import { Course } from '@/lib/types'
+import { Course, CourseLink } from '@/lib/types'
+import { useSession } from 'next-auth/react'
+import { toast } from 'sonner'
 
 interface CourseManagerProps {
   courses: Course[]
@@ -23,7 +24,7 @@ interface CourseManagerProps {
 
 interface CourseFormData {
   name: string
-  defaultUrl: string
+  links: CourseLink[]
 }
 
 export default function CourseManager({ courses, onCoursesChange }: CourseManagerProps) {
@@ -31,11 +32,13 @@ export default function CourseManager({ courses, onCoursesChange }: CourseManage
   const [editingCourse, setEditingCourse] = useState<Course | null>(null)
   const [formData, setFormData] = useState<CourseFormData>({
     name: '',
-    defaultUrl: ''
+    links: [{ id: '', name: '', url: '', order: 0 }]
   })
+  const { data: session } = useSession()
+  const [isLoading, setIsLoading] = useState(false)
 
   const resetForm = () => {
-    setFormData({ name: '', defaultUrl: '' })
+    setFormData({ name: '', links: [{ id: '', name: '', url: '', order: 0 }] })
     setEditingCourse(null)
   }
 
@@ -48,47 +51,96 @@ export default function CourseManager({ courses, onCoursesChange }: CourseManage
     setEditingCourse(course)
     setFormData({
       name: course.name,
-      defaultUrl: course.defaultUrl || ''
+      links: course.links && course.links.length > 0 
+        ? course.links.map(link => ({ ...link, id: link.id || '' }))
+        : [{ id: '', name: '', url: '', order: 0 }]
     })
     setIsDialogOpen(true)
   }
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     
-    if (!formData.name.trim()) return
-
-    const newCourses = [...courses]
+    if (!formData.name.trim() || !session?.user?.id) return
     
-    if (editingCourse) {
-      // Update existing course
-      const index = newCourses.findIndex(c => c.id === editingCourse.id)
-      if (index >= 0) {
-        newCourses[index] = {
-          ...editingCourse,
-          name: formData.name.trim(),
-          defaultUrl: formData.defaultUrl.trim() || undefined
-        }
-      }
-    } else {
-      // Add new course
-      const newCourse: Course = {
-        id: Date.now().toString(), // Simple ID generation for demo
-        name: formData.name.trim(),
-        defaultUrl: formData.defaultUrl.trim() || undefined
-      }
-      newCourses.push(newCourse)
-    }
+    setIsLoading(true)
+    
+    try {
+      const validLinks = formData.links.filter(link => 
+        link.name.trim() && link.url.trim()
+      ).map((link, index) => ({
+        name: link.name.trim(),
+        url: link.url.trim(),
+        order: index
+      }))
 
-    onCoursesChange(newCourses)
-    setIsDialogOpen(false)
-    resetForm()
+      const courseData = {
+        name: formData.name.trim(),
+        links: validLinks.length > 0 ? validLinks : undefined
+      }
+
+      let response
+      if (editingCourse) {
+        // Update existing course
+        response = await fetch(`/api/courses/${editingCourse.id}`, {
+          method: 'PATCH',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify(courseData),
+        })
+      } else {
+        // Create new course
+        response = await fetch('/api/courses', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify(courseData),
+        })
+      }
+
+      if (!response.ok) {
+        throw new Error('Failed to save course')
+      }
+
+      const updatedCourse = await response.json()
+      
+      // Update courses list
+      const newCourses = editingCourse 
+        ? courses.map(c => c.id === editingCourse.id ? updatedCourse : c)
+        : [...courses, updatedCourse]
+      
+      onCoursesChange(newCourses)
+      toast.success(editingCourse ? '課程已更新' : '課程已新增')
+      setIsDialogOpen(false)
+      resetForm()
+    } catch (error) {
+      console.error('Failed to save course:', error)
+      toast.error('儲存失敗，請稍後再試')
+    } finally {
+      setIsLoading(false)
+    }
   }
 
-  const handleDelete = (courseId: string) => {
-    if (confirm('確定要刪除這個課程嗎？')) {
+  const handleDelete = async (courseId: string) => {
+    if (!confirm('確定要刪除這個課程嗎？')) return
+    
+    try {
+      const response = await fetch(`/api/courses/${courseId}`, {
+        method: 'DELETE',
+      })
+
+      if (!response.ok) {
+        throw new Error('Failed to delete course')
+      }
+
       const newCourses = courses.filter(c => c.id !== courseId)
       onCoursesChange(newCourses)
+      toast.success('課程已刪除')
+    } catch (error) {
+      console.error('Failed to delete course:', error)
+      toast.error('刪除失敗，請稍後再試')
     }
   }
 
@@ -131,14 +183,66 @@ export default function CourseManager({ courses, onCoursesChange }: CourseManage
               </div>
               
               <div>
-                <Label htmlFor="defaultUrl">預設連結</Label>
-                <Input
-                  id="defaultUrl"
-                  value={formData.defaultUrl}
-                  onChange={(e) => setFormData({ ...formData, defaultUrl: e.target.value })}
-                  placeholder="https://example.com/course-link"
-                  type="url"
-                />
+                <Label>課程連結</Label>
+                <div className="space-y-3">
+                  {formData.links.map((link, index) => (
+                    <div key={index} className="flex gap-2 items-end">
+                      <div className="flex-1">
+                        <Input
+                          placeholder="連結名稱"
+                          value={link.name}
+                          onChange={(e) => {
+                            const newLinks = [...formData.links]
+                            newLinks[index].name = e.target.value
+                            setFormData({ ...formData, links: newLinks })
+                          }}
+                        />
+                      </div>
+                      <div className="flex-1">
+                        <Input
+                          placeholder="連結網址"
+                          type="url"
+                          value={link.url}
+                          onChange={(e) => {
+                            const newLinks = [...formData.links]
+                            newLinks[index].url = e.target.value
+                            setFormData({ ...formData, links: newLinks })
+                          }}
+                        />
+                      </div>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        onClick={() => {
+                          if (formData.links.length > 1) {
+                            const newLinks = formData.links.filter((_, i) => i !== index)
+                            setFormData({ ...formData, links: newLinks })
+                          }
+                        }}
+                        disabled={formData.links.length === 1}
+                      >
+                        <X className="w-3 h-3" />
+                      </Button>
+                    </div>
+                  ))}
+                  
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={() => {
+                      setFormData({
+                        ...formData,
+                        links: [...formData.links, { id: '', name: '', url: '', order: formData.links.length }]
+                      })
+                    }}
+                    className="w-full"
+                  >
+                    <Plus className="w-3 h-3 mr-1" />
+                    新增連結
+                  </Button>
+                </div>
               </div>
               
               <div className="flex justify-end gap-2">
@@ -149,9 +253,9 @@ export default function CourseManager({ courses, onCoursesChange }: CourseManage
                 >
                   取消
                 </Button>
-                <Button type="submit" className="gap-2">
+                <Button type="submit" className="gap-2" disabled={isLoading}>
                   <Save className="w-4 h-4" />
-                  {editingCourse ? '更新' : '新增'}
+                  {isLoading ? '儲存中...' : (editingCourse ? '更新' : '新增')}
                 </Button>
               </div>
             </form>
@@ -185,20 +289,27 @@ export default function CourseManager({ courses, onCoursesChange }: CourseManage
               </CardTitle>
             </CardHeader>
             <CardContent>
-              {course.defaultUrl ? (
-                <div className="flex items-center gap-2">
-                  <Link className="w-4 h-4 text-blue-500" />
-                  <a 
-                    href={course.defaultUrl} 
-                    target="_blank" 
-                    rel="noopener noreferrer"
-                    className="text-sm text-blue-500 hover:underline truncate"
-                  >
-                    {course.defaultUrl}
-                  </a>
+              {course.links && course.links.length > 0 ? (
+                <div className="space-y-2">
+                  {course.links.map((link, index) => (
+                    <div key={link.id || index} className="flex items-center gap-2">
+                      <Link className="w-4 h-4 text-blue-500" />
+                      <div className="flex-1 min-w-0">
+                        <div className="text-sm font-medium truncate">{link.name}</div>
+                        <a 
+                          href={link.url} 
+                          target="_blank" 
+                          rel="noopener noreferrer"
+                          className="text-xs text-blue-500 hover:underline truncate block"
+                        >
+                          {link.url}
+                        </a>
+                      </div>
+                    </div>
+                  ))}
                 </div>
               ) : (
-                <p className="text-sm text-muted-foreground">無預設連結</p>
+                <p className="text-sm text-muted-foreground">無連結</p>
               )}
             </CardContent>
           </Card>

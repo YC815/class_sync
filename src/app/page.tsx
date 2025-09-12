@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react'
 import { useSession } from 'next-auth/react'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import ScheduleTable from '@/components/schedule/ScheduleTable'
+import MobileDayView from '@/components/schedule/MobileDayView'
 import WeekNavigation from '@/components/schedule/WeekNavigation'
 import ScheduleActions from '@/components/schedule/ScheduleActions'
 import CourseManager from '@/components/courses/CourseManager'
@@ -13,19 +14,12 @@ import { WeekSchedule, Course, ScheduleEvent } from '@/lib/types'
 import { getWeekStart, initializeEmptySchedule } from '@/lib/schedule-utils'
 import { toast } from 'sonner'
 
-// Mock data for development
-const mockCourses: Course[] = [
-  { id: '1', name: 'React 基礎', defaultUrl: 'https://example.com/react' },
-  { id: '2', name: 'TypeScript 進階', defaultUrl: 'https://example.com/typescript' },
-  { id: '3', name: 'Next.js 實戰' },
-  { id: '4', name: 'UI/UX 設計' },
-]
 
 export default function Home() {
   const { data: session, status } = useSession()
   const [currentWeek, setCurrentWeek] = useState<Date | null>(null)
   const [schedule, setSchedule] = useState<WeekSchedule>(initializeEmptySchedule())
-  const [courses, setCourses] = useState<Course[]>(mockCourses)
+  const [courses, setCourses] = useState<Course[]>([])
   const [previewChanges, setPreviewChanges] = useState<{
     create: ScheduleEvent[]
     update: ScheduleEvent[]
@@ -39,6 +33,26 @@ export default function Home() {
   useEffect(() => {
     setCurrentWeek(getWeekStart(new Date()))
   }, [])
+
+  // Load courses when user session is available
+  useEffect(() => {
+    if (session?.user?.id) {
+      loadCourses()
+    }
+  }, [session])
+
+  const loadCourses = async () => {
+    try {
+      const response = await fetch('/api/courses')
+      if (response.ok) {
+        const data = await response.json()
+        setCourses(data)
+      }
+    } catch (error) {
+      console.error('Failed to load courses:', error)
+      toast.error('載入課程失敗')
+    }
+  }
 
   // Load existing schedule when week changes
   useEffect(() => {
@@ -255,19 +269,39 @@ export default function Home() {
                   </div>
                 </div>
               ) : (
-                <ScheduleTable
-                  schedule={schedule}
-                  courses={courses}
-                  onScheduleChange={(newSchedule) => {
-                    setSchedule(newSchedule)
-                    // 自動保存課表變更 (debounced)
-                    if (currentWeek) {
-                      const weekStartStr = currentWeek.toISOString().split('T')[0]
-                      setTimeout(() => saveScheduleData(weekStartStr, newSchedule), 1000)
-                    }
-                  }}
-                  currentWeek={currentWeek}
-                />
+                <>
+                  {/* 桌面版週課表 */}
+                  <div className="hidden md:block">
+                    <ScheduleTable
+                      schedule={schedule}
+                      courses={courses}
+                      onScheduleChange={(newSchedule) => {
+                        setSchedule(newSchedule)
+                        // 自動保存課表變更 (debounced)
+                        if (currentWeek) {
+                          const weekStartStr = currentWeek.toISOString().split('T')[0]
+                          setTimeout(() => saveScheduleData(weekStartStr, newSchedule), 1000)
+                        }
+                      }}
+                      currentWeek={currentWeek}
+                    />
+                  </div>
+                  
+                  {/* 手機版單日視圖 */}
+                  <MobileDayView
+                    schedule={schedule}
+                    courses={courses}
+                    onScheduleChange={(newSchedule) => {
+                      setSchedule(newSchedule)
+                      // 自動保存課表變更 (debounced)
+                      if (currentWeek) {
+                        const weekStartStr = currentWeek.toISOString().split('T')[0]
+                        setTimeout(() => saveScheduleData(weekStartStr, newSchedule), 1000)
+                      }
+                    }}
+                    currentWeek={currentWeek}
+                  />
+                </>
               )}
               
               <ScheduleActions

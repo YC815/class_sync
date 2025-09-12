@@ -14,25 +14,21 @@ export async function GET() {
       )
     }
 
-    const courses = await prisma.course.findMany({
+    const rooms = await prisma.room.findMany({
       where: {
         userId: session.user.id
       },
       include: {
-        links: {
-          orderBy: {
-            order: 'asc'
-          }
-        }
+        base: true
       },
       orderBy: {
         createdAt: 'desc'
       }
     })
 
-    return NextResponse.json(courses)
+    return NextResponse.json(rooms)
   } catch (error) {
-    console.error('Failed to fetch courses:', error)
+    console.error('Failed to fetch rooms:', error)
     return NextResponse.json(
       { error: 'Internal server error' },
       { status: 500 }
@@ -51,39 +47,44 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    const { name, links } = await request.json()
+    const { name, baseId } = await request.json()
 
-    if (!name) {
+    if (!name || !baseId) {
       return NextResponse.json(
-        { error: 'Name is required' },
+        { error: 'Name and baseId are required' },
         { status: 400 }
       )
     }
 
-    const course = await prisma.course.create({
-      data: {
-        name,
-        userId: session.user.id,
-        links: links && links.length > 0 ? {
-          create: links.map((link: { name: string; url: string }, index: number) => ({
-            name: link.name,
-            url: link.url,
-            order: index
-          }))
-        } : undefined
-      },
-      include: {
-        links: {
-          orderBy: {
-            order: 'asc'
-          }
-        }
+    // Verify base ownership
+    const base = await prisma.base.findFirst({
+      where: {
+        id: baseId,
+        userId: session.user.id
       }
     })
 
-    return NextResponse.json(course, { status: 201 })
+    if (!base) {
+      return NextResponse.json(
+        { error: 'Base not found' },
+        { status: 404 }
+      )
+    }
+
+    const room = await prisma.room.create({
+      data: {
+        name,
+        baseId,
+        userId: session.user.id
+      },
+      include: {
+        base: true
+      }
+    })
+
+    return NextResponse.json(room, { status: 201 })
   } catch (error) {
-    console.error('Failed to create course:', error)
+    console.error('Failed to create room:', error)
     return NextResponse.json(
       { error: 'Internal server error' },
       { status: 500 }

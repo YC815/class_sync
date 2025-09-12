@@ -19,6 +19,8 @@ model User {
   createdAt     DateTime  @default(now()) @map("created_at")
   
   courses Course[]
+  bases   Base[]
+  rooms   Room[]
   weeks   Week[]
   events  Event[]
   
@@ -61,16 +63,62 @@ model VerificationToken {
 }
 
 model Course {
-  id         String   @id @default(cuid())
-  userId     String   @map("user_id")
-  name       String
-  defaultUrl String?  @map("default_url")
-  createdAt  DateTime @default(now()) @map("created_at")
+  id        String   @id @default(cuid())
+  userId    String   @map("user_id")
+  name      String
+  links     CourseLink[]
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
   
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
   
   @@map("courses")
   @@index([userId])
+}
+
+model CourseLink {
+  id       String @id @default(cuid())
+  courseId String @map("course_id")
+  name     String
+  url      String
+  order    Int    @default(0)
+  
+  course Course @relation(fields: [courseId], references: [id], onDelete: Cascade)
+  
+  @@map("course_links")
+  @@index([courseId])
+}
+
+model Base {
+  id        String   @id @default(cuid())
+  userId    String   @map("user_id")
+  name      String
+  address   String?
+  placeId   String?  @map("place_id")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+  
+  user  User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  rooms Room[]
+  
+  @@map("bases")
+  @@index([userId])
+}
+
+model Room {
+  id        String   @id @default(cuid())
+  userId    String   @map("user_id")
+  baseId    String   @map("base_id")
+  name      String
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+  
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  base Base @relation(fields: [baseId], references: [id], onDelete: Cascade)
+  
+  @@map("rooms")
+  @@index([userId])
+  @@index([baseId])
 }
 
 model Week {

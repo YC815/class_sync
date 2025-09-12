@@ -15,7 +15,7 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "排課系統 × Google Calendar 同步",
+  title: "ClassSync",
   description: "管理週課表並同步至 Google Calendar",
 };
 

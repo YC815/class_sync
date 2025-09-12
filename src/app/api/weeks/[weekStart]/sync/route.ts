@@ -7,7 +7,7 @@ import { validateScheduleEvent } from '@/lib/schedule-utils'
 
 export async function POST(
   request: NextRequest,
-  { params }: { params: Promise<{ weekStart: string }> | { weekStart: string } }
+  { params }: { params: Promise<{ weekStart: string }> }
 ) {
   try {
     const resolvedParams = await params
@@ -32,7 +32,7 @@ export async function POST(
     console.log('Events to delete:', eventsToDelete.length)
 
     // Get access token from session (JWT strategy)
-    const accessToken = (session as any).accessToken
+    const accessToken = (session as { accessToken?: string }).accessToken
     
     if (!accessToken) {
       return NextResponse.json({ error: 'Google account not connected or token expired' }, { status: 401 })
@@ -69,7 +69,7 @@ export async function POST(
     
     // 清理該週所有在資料庫但不在新事件列表中的事件
     const newEventKeys = new Set(
-      events.map((e: any) => `${e.weekday}-${e.periodStart}-${e.periodEnd}-${e.courseId || e.courseName}`)
+      events.map((e: { weekday: number; periodStart: number; periodEnd: number; courseId?: string; courseName: string }) => `${e.weekday}-${e.periodStart}-${e.periodEnd}-${e.courseId || e.courseName}`)
     )
     
     for (const existingEvent of existingEvents) {
@@ -104,10 +104,33 @@ export async function POST(
           periods: `${event.periodStart}-${event.periodEnd}`,
           course: event.courseName || event.courseId
         })
+        
+        // 從資料庫載入課程連結資訊
+        let courseLinks: { name: string; url: string }[] = []
+        if (event.courseId) {
+          const courseWithLinks = await prisma.course.findUnique({
+            where: { id: event.courseId },
+            include: {
+              links: {
+                orderBy: {
+                  order: 'asc'
+                }
+              }
+            }
+          })
+          
+          if (courseWithLinks?.links) {
+            courseLinks = courseWithLinks.links.map(link => ({
+              name: link.name,
+              url: link.url
+            }))
+          }
+        }
+        
         const calendarEvent = calendarService.scheduleEventToCalendarEvent(
           event,
           weekStart,
-          event.location
+          courseLinks
         )
 
         let calendarEventId: string

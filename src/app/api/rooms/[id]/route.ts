@@ -18,56 +18,58 @@ export async function PATCH(
       )
     }
 
-    const { name, links } = await request.json()
+    const { name, baseId } = await request.json()
     
     if (!name) {
       return NextResponse.json({ error: 'Name is required' }, { status: 400 })
     }
 
     // Verify ownership
-    const existingCourse = await prisma.course.findFirst({
+    const existingRoom = await prisma.room.findFirst({
       where: {
         id: resolvedParams.id,
         userId: session.user.id
       }
     })
 
-    if (!existingCourse) {
+    if (!existingRoom) {
       return NextResponse.json(
-        { error: 'Course not found' },
+        { error: 'Room not found' },
         { status: 404 }
       )
     }
 
-    // Delete existing links and create new ones
-    await prisma.courseLink.deleteMany({
-      where: { courseId: resolvedParams.id }
-    })
+    // If baseId is being changed, verify the new base exists and is owned by the user
+    if (baseId && baseId !== existingRoom.baseId) {
+      const base = await prisma.base.findFirst({
+        where: {
+          id: baseId,
+          userId: session.user.id
+        }
+      })
 
-    const course = await prisma.course.update({
+      if (!base) {
+        return NextResponse.json(
+          { error: 'Base not found' },
+          { status: 404 }
+        )
+      }
+    }
+
+    const room = await prisma.room.update({
       where: { id: resolvedParams.id },
       data: {
         name,
-        links: links && links.length > 0 ? {
-          create: links.map((link: { name: string; url: string }, index: number) => ({
-            name: link.name,
-            url: link.url,
-            order: index
-          }))
-        } : undefined
+        ...(baseId && { baseId })
       },
       include: {
-        links: {
-          orderBy: {
-            order: 'asc'
-          }
-        }
+        base: true
       }
     })
 
-    return NextResponse.json(course)
+    return NextResponse.json(room)
   } catch (error) {
-    console.error('Error updating course:', error)
+    console.error('Error updating room:', error)
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
   }
 }
@@ -88,27 +90,27 @@ export async function DELETE(
     }
 
     // Verify ownership
-    const existingCourse = await prisma.course.findFirst({
+    const existingRoom = await prisma.room.findFirst({
       where: {
         id: resolvedParams.id,
         userId: session.user.id
       }
     })
 
-    if (!existingCourse) {
+    if (!existingRoom) {
       return NextResponse.json(
-        { error: 'Course not found' },
+        { error: 'Room not found' },
         { status: 404 }
       )
     }
 
-    await prisma.course.delete({
+    await prisma.room.delete({
       where: { id: resolvedParams.id }
     })
 
     return NextResponse.json({ success: true })
   } catch (error) {
-    console.error('Error deleting course:', error)
+    console.error('Error deleting room:', error)
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
   }
 }

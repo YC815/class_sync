@@ -8,7 +8,7 @@ import { ScheduleEvent } from '@/lib/types'
 
 export async function POST(
   request: NextRequest,
-  { params }: { params: Promise<{ weekStart: string }> | { weekStart: string } }
+  { params }: { params: Promise<{ weekStart: string }> }
 ) {
   try {
     const resolvedParams = await params

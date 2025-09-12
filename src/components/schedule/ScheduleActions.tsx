@@ -3,7 +3,7 @@
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
-import { Calendar, Plus, Minus, Loader2 } from 'lucide-react'
+import { Calendar, Plus, Minus, Loader2, ExternalLink } from 'lucide-react'
 import { ScheduleEvent } from '@/lib/types'
 
 interface ScheduleActionsProps {
@@ -31,13 +31,20 @@ export default function ScheduleActions({
     <div className="space-y-4">
       {/* Action Buttons */}
       <div className="flex flex-col sm:flex-row gap-2">
+        <Button
+          variant="outline"
+          onClick={() => window.open('https://docs.google.com/spreadsheets/d/1scxvMRoDHDc_ubV6fWd0rOcHpFzwMESrBmOtoHiezPc/edit?gid=0#gid=0', '_blank')}
+          className="gap-2 w-full sm:w-auto"
+        >
+          <ExternalLink className="w-4 h-4" />
+          開啟 Google 課表
+        </Button>
         <Button 
           variant="outline" 
           onClick={onPreview}
           disabled={isLoading}
-          className="w-full sm:w-auto gap-2"
+          className="w-full sm:w-auto"
         >
-          {isLoading && <Loader2 className="w-4 h-4 animate-spin" />}
           預覽同步
         </Button>
         

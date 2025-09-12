@@ -12,7 +12,7 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: 'User ID is required' }, { status: 400 })
     }
 
-    const whereClause: any = { userId }
+    const whereClause: { userId: string; weekStart?: { gte: Date; lte: Date } | Date } = { userId }
     
     if (from && to) {
       whereClause.weekStart = {

@@ -6,7 +6,7 @@ import { WeekSchedule } from '@/lib/types'
 
 export async function GET(
   request: NextRequest,
-  { params }: { params: Promise<{ weekStart: string }> | { weekStart: string } }
+  { params }: { params: Promise<{ weekStart: string }> }
 ) {
   try {
     const resolvedParams = await params

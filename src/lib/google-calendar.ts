@@ -79,7 +79,7 @@ export class GoogleCalendarService {
   scheduleEventToCalendarEvent(
     scheduleEvent: ScheduleEvent,
     weekStart: Date,
-    location?: string
+    courseLinks?: { name: string; url: string }[]
   ): CalendarEvent {
     const eventDate = new Date(weekStart)
     eventDate.setDate(weekStart.getDate() + scheduleEvent.weekday - 1)
@@ -99,7 +99,14 @@ export class GoogleCalendarService {
     }
     description += ' 節'
 
-    if (scheduleEvent.url) {
+    // 支援多連結格式：Calendar 顯示 "- 名稱: 連結"
+    if (courseLinks && courseLinks.length > 0) {
+      description += '\n\n課程連結：'
+      courseLinks.forEach(link => {
+        description += `\n- ${link.name}: ${link.url}`
+      })
+    } else if (scheduleEvent.url) {
+      // 向後相容：如果沒有多連結但有單一 URL
       description += `\n\n課程連結：${scheduleEvent.url}`
     }
 
@@ -113,7 +120,8 @@ export class GoogleCalendarService {
         dateTime: end.toISOString(),
         timeZone: 'Asia/Taipei',
       },
-      location: location || scheduleEvent.location,
+      // 移除地點欄位的自動輸入，改為空值或字串格式
+      location: scheduleEvent.location || '',
       description,
       extendedProperties: {
         private: {

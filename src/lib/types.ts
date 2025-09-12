@@ -1,7 +1,35 @@
+export interface CourseLink {
+  id: string
+  name: string
+  url: string
+  order?: number
+}
+
 export interface Course {
   id: string
   name: string
-  defaultUrl?: string
+  links?: CourseLink[]
+  createdAt: Date
+  updatedAt: Date
+}
+
+export interface Base {
+  id: string
+  name: string
+  address?: string
+  placeId?: string
+  rooms?: Room[]
+  createdAt: Date
+  updatedAt: Date
+}
+
+export interface Room {
+  id: string
+  name: string
+  baseId: string
+  base?: Base
+  createdAt: Date
+  updatedAt: Date
 }
 
 export interface ScheduleCell {
