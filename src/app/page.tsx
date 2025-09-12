@@ -1,103 +1,188 @@
-import Image from "next/image";
+'use client'
+
+import { useState, useEffect } from 'react'
+import { useSession } from 'next-auth/react'
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
+import ScheduleTable from '@/components/schedule/ScheduleTable'
+import WeekNavigation from '@/components/schedule/WeekNavigation'
+import ScheduleActions from '@/components/schedule/ScheduleActions'
+import CourseManager from '@/components/courses/CourseManager'
+import AuthButton from '@/components/auth/AuthButton'
+import { WeekSchedule, Course, LocationBase, ScheduleEvent } from '@/lib/types'
+import { getWeekStart, initializeEmptySchedule } from '@/lib/schedule-utils'
+
+// Mock data for development
+const mockCourses: Course[] = [
+  { id: '1', name: 'React 基礎', defaultUrl: 'https://example.com/react' },
+  { id: '2', name: 'TypeScript 進階', defaultUrl: 'https://example.com/typescript' },
+  { id: '3', name: 'Next.js 實戰' },
+  { id: '4', name: 'UI/UX 設計' },
+]
 
 export default function Home() {
-  return (
-    <div className="font-sans grid grid-rows-[20px_1fr_20px] items-center justify-items-center min-h-screen p-8 pb-20 gap-16 sm:p-20">
-      <main className="flex flex-col gap-[32px] row-start-2 items-center sm:items-start">
-        <Image
-          className="dark:invert"
-          src="/next.svg"
-          alt="Next.js logo"
-          width={180}
-          height={38}
-          priority
-        />
-        <ol className="font-mono list-inside list-decimal text-sm/6 text-center sm:text-left">
-          <li className="mb-2 tracking-[-.01em]">
-            Get started by editing{" "}
-            <code className="bg-black/[.05] dark:bg-white/[.06] font-mono font-semibold px-1 py-0.5 rounded">
-              src/app/page.tsx
-            </code>
-            .
-          </li>
-          <li className="tracking-[-.01em]">
-            Save and see your changes instantly.
-          </li>
-        </ol>
+  const { data: session, status } = useSession()
+  const [currentWeek, setCurrentWeek] = useState<Date>(() => getWeekStart(new Date()))
+  const [schedule, setSchedule] = useState<WeekSchedule>(initializeEmptySchedule())
+  const [courses, setCourses] = useState<Course[]>(mockCourses)
+  const [currentLocation, setCurrentLocation] = useState<LocationBase>()
+  const [previewChanges, setPreviewChanges] = useState<{
+    create: ScheduleEvent[]
+    update: ScheduleEvent[]
+    delete: string[]
+  }>()
+  const [isLoading, setIsLoading] = useState(false)
 
-        <div className="flex gap-4 items-center flex-col sm:flex-row">
-          <a
-            className="rounded-full border border-solid border-transparent transition-colors flex items-center justify-center bg-foreground text-background gap-2 hover:bg-[#383838] dark:hover:bg-[#ccc] font-medium text-sm sm:text-base h-10 sm:h-12 px-4 sm:px-5 sm:w-auto"
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            <Image
-              className="dark:invert"
-              src="/vercel.svg"
-              alt="Vercel logomark"
-              width={20}
-              height={20}
-            />
-            Deploy now
-          </a>
-          <a
-            className="rounded-full border border-solid border-black/[.08] dark:border-white/[.145] transition-colors flex items-center justify-center hover:bg-[#f2f2f2] dark:hover:bg-[#1a1a1a] hover:border-transparent font-medium text-sm sm:text-base h-10 sm:h-12 px-4 sm:px-5 w-full sm:w-auto md:w-[158px]"
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Read our docs
-          </a>
+  const handlePreview = async () => {
+    setIsLoading(true)
+    try {
+      const weekStartStr = currentWeek.toISOString().split('T')[0]
+      
+      const response = await fetch(`/api/weeks/${weekStartStr}/preview`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          scheduleData: schedule,
+          currentLocation
+        }),
+      })
+
+      if (!response.ok) {
+        throw new Error('Preview failed')
+      }
+
+      const data = await response.json()
+      setPreviewChanges(data.changes)
+    } catch (error) {
+      console.error('Preview failed:', error)
+      alert('預覽失敗，請檢查登入狀態並重試')
+    } finally {
+      setIsLoading(false)
+    }
+  }
+
+  const handleSync = async () => {
+    if (!previewChanges) return
+    
+    setIsLoading(true)
+    try {
+      const weekStartStr = currentWeek.toISOString().split('T')[0]
+      
+      const response = await fetch(`/api/weeks/${weekStartStr}/sync`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          events: previewChanges.create.concat(previewChanges.update),
+          eventsToDelete: previewChanges.delete
+        }),
+      })
+
+      if (!response.ok) {
+        const errorData = await response.json()
+        throw new Error(errorData.error || 'Sync failed')
+      }
+
+      const data = await response.json()
+      alert(data.message || '同步成功！')
+      setPreviewChanges(undefined)
+    } catch (error) {
+      console.error('Sync failed:', error)
+      alert(`同步失敗：${error.message}`)
+    } finally {
+      setIsLoading(false)
+    }
+  }
+
+  const handleCopyWeek = async () => {
+    setIsLoading(true)
+    try {
+      // Mock copy week logic
+      await new Promise(resolve => setTimeout(resolve, 500))
+      alert('已複製到下週')
+    } catch (error) {
+      console.error('Copy week failed:', error)
+      alert('複製失敗')
+    } finally {
+      setIsLoading(false)
+    }
+  }
+
+  if (status === 'loading') {
+    return (
+      <div className="container mx-auto p-6 flex items-center justify-center min-h-screen">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-gray-900 mx-auto mb-4"></div>
+          <p>載入中...</p>
         </div>
-      </main>
-      <footer className="row-start-3 flex gap-[24px] flex-wrap items-center justify-center">
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="/file.svg"
-            alt="File icon"
-            width={16}
-            height={16}
+      </div>
+    )
+  }
+
+  if (!session) {
+    return (
+      <div className="container mx-auto p-6 flex items-center justify-center min-h-screen">
+        <div className="text-center space-y-6">
+          <div>
+            <h1 className="text-3xl font-bold mb-2">排課系統 × Google Calendar 同步</h1>
+            <p className="text-muted-foreground">請先登入 Google 帳號以開始使用</p>
+          </div>
+          <AuthButton />
+        </div>
+      </div>
+    )
+  }
+
+  return (
+    <div className="container mx-auto p-4 sm:p-6 space-y-6">
+      <header className="flex flex-col sm:flex-row sm:justify-between sm:items-start gap-4">
+        <div>
+          <h1 className="text-2xl sm:text-3xl font-bold">排課系統 × Google Calendar 同步</h1>
+          <p className="text-muted-foreground mt-2 text-sm sm:text-base">管理週課表並同步至 Google Calendar</p>
+        </div>
+        <div className="sm:flex-shrink-0">
+          <AuthButton />
+        </div>
+      </header>
+
+      <Tabs defaultValue="schedule" className="space-y-4">
+        <TabsList>
+          <TabsTrigger value="schedule">週課表</TabsTrigger>
+          <TabsTrigger value="courses">課程庫</TabsTrigger>
+        </TabsList>
+
+        <TabsContent value="schedule" className="space-y-6">
+          <WeekNavigation 
+            currentWeek={currentWeek}
+            onWeekChange={setCurrentWeek}
           />
-          Learn
-        </a>
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="/window.svg"
-            alt="Window icon"
-            width={16}
-            height={16}
+          
+          <ScheduleTable
+            schedule={schedule}
+            courses={courses}
+            onScheduleChange={setSchedule}
+            currentLocation={currentLocation}
+            onLocationChange={setCurrentLocation}
           />
-          Examples
-        </a>
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://nextjs.org?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="/globe.svg"
-            alt="Globe icon"
-            width={16}
-            height={16}
+          
+          <ScheduleActions
+            onPreview={handlePreview}
+            onSync={handleSync}
+            onCopyWeek={handleCopyWeek}
+            previewChanges={previewChanges}
+            isLoading={isLoading}
           />
-          Go to nextjs.org →
-        </a>
-      </footer>
+        </TabsContent>
+
+        <TabsContent value="courses" className="space-y-4">
+          <CourseManager 
+            courses={courses}
+            onCoursesChange={setCourses}
+          />
+        </TabsContent>
+      </Tabs>
     </div>
-  );
+  )
 }

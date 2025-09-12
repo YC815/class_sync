@@ -1,0 +1,111 @@
+generator client {
+  provider = "prisma-client-js"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id            String    @id @default(cuid())
+  name          String?
+  email         String    @unique
+  emailVerified DateTime?
+  image         String?
+  accounts      Account[]
+  sessions      Session[]
+  createdAt     DateTime  @default(now()) @map("created_at")
+  
+  courses Course[]
+  weeks   Week[]
+  events  Event[]
+  
+  @@map("users")
+}
+
+model Account {
+  id                String  @id @default(cuid())
+  userId            String
+  type              String
+  provider          String
+  providerAccountId String
+  refresh_token     String? @db.Text
+  access_token      String? @db.Text
+  expires_at        Int?
+  token_type        String?
+  scope             String?
+  id_token          String? @db.Text
+  session_state     String?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId])
+}
+
+model Session {
+  id           String   @id @default(cuid())
+  sessionToken String   @unique
+  userId       String
+  expires      DateTime
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model VerificationToken {
+  identifier String
+  token      String   @unique
+  expires    DateTime
+
+  @@unique([identifier, token])
+}
+
+model Course {
+  id         String   @id @default(cuid())
+  userId     String   @map("user_id")
+  name       String
+  defaultUrl String?  @map("default_url")
+  createdAt  DateTime @default(now()) @map("created_at")
+  
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  @@map("courses")
+  @@index([userId])
+}
+
+model Week {
+  id        String   @id @default(cuid())
+  userId    String   @map("user_id")
+  weekStart DateTime @map("week_start") @db.Date
+  data      Json
+  createdAt DateTime @default(now()) @map("created_at")
+  
+  user   User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  events Event[]
+  
+  @@unique([userId, weekStart])
+  @@map("weeks")
+  @@index([userId, weekStart])
+}
+
+model Event {
+  id              String   @id @default(cuid())
+  userId          String   @map("user_id")
+  weekStart       DateTime @map("week_start") @db.Date
+  weekday         Int
+  periodStart     Int      @map("period_start")
+  periodEnd       Int      @map("period_end")
+  courseId        String?  @map("course_id")
+  courseName      String?  @map("course_name")
+  calendarEventId String?  @map("calendar_event_id")
+  seriesId        String?  @map("series_id")
+  createdAt       DateTime @default(now()) @map("created_at")
+  
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  week Week @relation(fields: [userId, weekStart], references: [userId, weekStart], onDelete: Cascade)
+  
+  @@map("events")
+  @@index([userId, weekStart])
+  @@index([calendarEventId])
+  @@index([seriesId])
+}
