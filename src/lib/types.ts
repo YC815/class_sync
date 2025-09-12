@@ -39,6 +39,7 @@ export interface ScheduleCell {
   location?: string
   url?: string
   isTemporary?: boolean
+  isContinuation?: boolean // 是否為連堂課程
   venue?: string
   base?: string // 基地：弘道基地、吉林基地、線上、空
   room?: string // 教室：根據基地顯示對應列表

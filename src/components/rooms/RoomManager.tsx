@@ -285,13 +285,39 @@ export default function RoomManager() {
                       <div className="flex gap-2">
                         <Input
                           value={currentRoomInput}
-                          onChange={(e) => setCurrentRoomInput(e.target.value)}
+                          onChange={(e) => {
+                            const value = e.target.value;
+                            // 檢測是否包含換行符（中文輸入法按Enter後的結果）
+                            if (value.includes('\n')) {
+                              const roomName = value.replace('\n', '').trim();
+                              if (roomName) {
+                                setFormData(prev => ({
+                                  ...prev,
+                                  rooms: [...prev.rooms, roomName]
+                                }));
+                                setCurrentRoomInput('');
+                              }
+                            } else {
+                              setCurrentRoomInput(value);
+                            }
+                          }}
                           placeholder="輸入新教室名稱..."
                           className="flex-1"
+                          onCompositionStart={(e) => {
+                            // 中文輸入開始，設置標記
+                            e.currentTarget.dataset.composing = 'true';
+                          }}
+                          onCompositionEnd={(e) => {
+                            // 中文輸入結束，清除標記
+                            e.currentTarget.dataset.composing = 'false';
+                          }}
                           onKeyDown={(e) => {
-                            if (e.key === 'Enter' && currentRoomInput.trim()) {
-                              e.preventDefault();
-                              addRoom();
+                            // 只有在非中文輸入狀態下才處理Enter
+                            if (e.key === 'Enter' && e.currentTarget.dataset.composing !== 'true') {
+                              if (currentRoomInput.trim()) {
+                                e.preventDefault();
+                                addRoom();
+                              }
                             }
                           }}
                         />

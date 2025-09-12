@@ -77,7 +77,9 @@ export default function ScheduleTable({
     
     return (
       <div className="flex items-center gap-1">
-        <span className="text-sm font-medium">{displayName}</span>
+        <span className={`text-xs font-medium ${cell.isContinuation ? 'text-orange-600' : ''}`}>
+          {cell.isContinuation ? `連堂（${displayName}）` : displayName}
+        </span>
         {(cell.url || course?.links?.length) && (
           <Link className="w-3 h-3 text-blue-500" />
         )}
@@ -97,6 +99,19 @@ export default function ScheduleTable({
         day,
         period
       })
+      return
+    }
+
+    if (courseId === 'continuation') {
+      // 處理連堂選項
+      const previousPeriod = period - 1
+      const previousCell = schedule[day]?.[previousPeriod]
+      if (previousCell) {
+        updateCell(day, period, {
+          ...previousCell,
+          isContinuation: true
+        })
+      }
       return
     }
 
@@ -171,10 +186,10 @@ export default function ScheduleTable({
             {PERIODS.map(period => (
               <React.Fragment key={period}>
                 <TableRow>
-                  <TableCell className="font-medium text-center">
+                  <TableCell className="font-medium text-center align-top">
                     {period}
                   </TableCell>
-                  <TableCell className="text-xs text-muted-foreground">
+                  <TableCell className="text-xs text-muted-foreground align-top">
                     {PERIOD_TIMES[period as keyof typeof PERIOD_TIMES]}
                   </TableCell>
                   {WEEKDAYS.map((_, dayIndex) => {
@@ -185,10 +200,10 @@ export default function ScheduleTable({
                       <TableCell key={`${day}-${period}`} className="p-1 sm:p-2">
                         <div className="space-y-1">
                           <Select
-                            value={cell?.courseId || (cell?.isTemporary ? 'temp' : 'none')}
+                            value={cell?.isContinuation ? 'continuation' : (cell?.courseId || (cell?.isTemporary ? 'temp' : 'none'))}
                             onValueChange={(value) => handleCourseSelect(day, period, value)}
                           >
-                            <SelectTrigger className="w-full h-auto min-h-8 border-dashed text-xs">
+                            <SelectTrigger className="w-full h-auto min-h-8 border-dashed text-xs items-start">
                               <SelectValue>
                                 {cell ? getCellContent(day, period) : (
                                   <span className="text-muted-foreground text-xs">選擇課程</span>
@@ -197,6 +212,27 @@ export default function ScheduleTable({
                             </SelectTrigger>
                             <SelectContent>
                               <SelectItem value="none">無課程</SelectItem>
+                              {(() => {
+                                // 檢查是否為偶數節次且上一節有課程
+                                const isEvenPeriod = period % 2 === 0
+                                const previousPeriod = period - 1
+                                const previousCell = schedule[day]?.[previousPeriod]
+                                
+                                if (isEvenPeriod && previousCell) {
+                                  const previousCourseName = previousCell.courseName || 
+                                    courses.find(c => c.id === previousCell.courseId)?.name || 
+                                    '未知課程'
+                                  return (
+                                    <SelectItem 
+                                      value="continuation" 
+                                      className="text-orange-600 font-medium"
+                                    >
+                                      連堂（{previousCourseName}）
+                                    </SelectItem>
+                                  )
+                                }
+                                return null
+                              })()}
                               {courses.map(course => (
                                 <SelectItem key={course.id} value={course.id}>
                                   {course.name}
@@ -215,7 +251,7 @@ export default function ScheduleTable({
                                 })()}
                                 onValueChange={(value) => handleBaseSelect(day, period, value)}
                               >
-                                <SelectTrigger className="w-full h-6 text-xs">
+                                <SelectTrigger className="w-full h-6 text-xs items-start">
                                   <SelectValue placeholder="選擇基地" />
                                 </SelectTrigger>
                                 <SelectContent>
@@ -238,7 +274,7 @@ export default function ScheduleTable({
                                     value={cell.room || 'none'}
                                     onValueChange={(value) => handleRoomSelect(day, period, value)}
                                   >
-                                    <SelectTrigger className="w-full h-6 text-xs">
+                                    <SelectTrigger className="w-full h-6 text-xs items-start">
                                       <SelectValue placeholder="選擇教室" />
                                     </SelectTrigger>
                                     <SelectContent>
