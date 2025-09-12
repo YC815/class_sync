@@ -77,7 +77,7 @@ export default function ScheduleTable({
   }
 
   const handleCourseSelect = (day: number, period: number, courseId: string) => {
-    if (courseId === 'none') {
+    if (courseId === 'none' || courseId === '') {
       updateCell(day, period, null)
       return
     }
@@ -112,14 +112,14 @@ export default function ScheduleTable({
       <div className="flex items-center gap-2">
         <span className="text-sm font-medium">本次地點：</span>
         <Select 
-          value={currentLocation || ''} 
-          onValueChange={(value) => onLocationChange(value as LocationBase | undefined)}
+          value={currentLocation || 'none'} 
+          onValueChange={(value) => onLocationChange(value === 'none' ? undefined : value as LocationBase)}
         >
           <SelectTrigger className="w-32">
             <SelectValue placeholder="選擇地點" />
           </SelectTrigger>
           <SelectContent>
-            <SelectItem value="">無</SelectItem>
+            <SelectItem value="none">無</SelectItem>
             <SelectItem value="弘道">弘道</SelectItem>
             <SelectItem value="吉林">吉林</SelectItem>
           </SelectContent>
@@ -156,7 +156,7 @@ export default function ScheduleTable({
                   return (
                     <TableCell key={`${day}-${period}`} className="p-1 sm:p-2">
                       <Select
-                        value={cell?.courseId || (cell?.isTemporary ? 'temp' : '')}
+                        value={cell?.courseId || (cell?.isTemporary ? 'temp' : 'none')}
                         onValueChange={(value) => handleCourseSelect(day, period, value)}
                       >
                         <SelectTrigger className="w-full h-auto min-h-8 border-dashed text-xs">
@@ -167,7 +167,7 @@ export default function ScheduleTable({
                           </SelectValue>
                         </SelectTrigger>
                         <SelectContent>
-                          <SelectItem value="">無課程</SelectItem>
+                          <SelectItem value="none">無課程</SelectItem>
                           {courses.map(course => (
                             <SelectItem key={course.id} value={course.id}>
                               {course.name}

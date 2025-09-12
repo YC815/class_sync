@@ -23,19 +23,14 @@ export async function POST(
     const weekStart = new Date(params.weekStart)
     const userId = session.user.id
 
-    // Get access token for Google Calendar API
-    const account = await prisma.account.findFirst({
-      where: {
-        userId,
-        provider: 'google',
-      },
-    })
-
-    if (!account?.access_token) {
+    // Get access token from session (JWT strategy)
+    const accessToken = (session as any).accessToken
+    
+    if (!accessToken) {
       return NextResponse.json({ error: 'Google account not connected or token expired' }, { status: 401 })
     }
 
-    const calendarService = new GoogleCalendarService(account.access_token)
+    const calendarService = new GoogleCalendarService(accessToken)
     
     // Delete events that are no longer in the schedule
     for (const eventId of eventsToDelete) {

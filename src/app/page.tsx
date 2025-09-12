@@ -21,7 +21,7 @@ const mockCourses: Course[] = [
 
 export default function Home() {
   const { data: session, status } = useSession()
-  const [currentWeek, setCurrentWeek] = useState<Date>(() => getWeekStart(new Date()))
+  const [currentWeek, setCurrentWeek] = useState<Date | null>(null)
   const [schedule, setSchedule] = useState<WeekSchedule>(initializeEmptySchedule())
   const [courses, setCourses] = useState<Course[]>(mockCourses)
   const [currentLocation, setCurrentLocation] = useState<LocationBase>()
@@ -32,7 +32,14 @@ export default function Home() {
   }>()
   const [isLoading, setIsLoading] = useState(false)
 
+  // Initialize currentWeek on client side to avoid hydration mismatch
+  useEffect(() => {
+    setCurrentWeek(getWeekStart(new Date()))
+  }, [])
+
   const handlePreview = async () => {
+    if (!currentWeek) return
+    
     setIsLoading(true)
     try {
       const weekStartStr = currentWeek.toISOString().split('T')[0]
@@ -63,7 +70,7 @@ export default function Home() {
   }
 
   const handleSync = async () => {
-    if (!previewChanges) return
+    if (!previewChanges || !currentWeek) return
     
     setIsLoading(true)
     try {
@@ -110,7 +117,7 @@ export default function Home() {
     }
   }
 
-  if (status === 'loading') {
+  if (status === 'loading' || !currentWeek) {
     return (
       <div className="container mx-auto p-6 flex items-center justify-center min-h-screen">
         <div className="text-center">
@@ -154,26 +161,30 @@ export default function Home() {
         </TabsList>
 
         <TabsContent value="schedule" className="space-y-6">
-          <WeekNavigation 
-            currentWeek={currentWeek}
-            onWeekChange={setCurrentWeek}
-          />
-          
-          <ScheduleTable
-            schedule={schedule}
-            courses={courses}
-            onScheduleChange={setSchedule}
-            currentLocation={currentLocation}
-            onLocationChange={setCurrentLocation}
-          />
-          
-          <ScheduleActions
-            onPreview={handlePreview}
-            onSync={handleSync}
-            onCopyWeek={handleCopyWeek}
-            previewChanges={previewChanges}
-            isLoading={isLoading}
-          />
+          {currentWeek && (
+            <>
+              <WeekNavigation 
+                currentWeek={currentWeek}
+                onWeekChange={setCurrentWeek}
+              />
+              
+              <ScheduleTable
+                schedule={schedule}
+                courses={courses}
+                onScheduleChange={setSchedule}
+                currentLocation={currentLocation}
+                onLocationChange={setCurrentLocation}
+              />
+              
+              <ScheduleActions
+                onPreview={handlePreview}
+                onSync={handleSync}
+                onCopyWeek={handleCopyWeek}
+                previewChanges={previewChanges}
+                isLoading={isLoading}
+              />
+            </>
+          )}
         </TabsContent>
 
         <TabsContent value="courses" className="space-y-4">
