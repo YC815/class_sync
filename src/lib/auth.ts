@@ -1,7 +1,10 @@
 import { NextAuthOptions } from 'next-auth'
 import GoogleProvider from 'next-auth/providers/google'
+import { PrismaAdapter } from '@next-auth/prisma-adapter'
+import { prisma } from './prisma'
 
 export const authOptions: NextAuthOptions = {
+  adapter: PrismaAdapter(prisma),
   providers: [
     GoogleProvider({
       clientId: process.env.GOOGLE_CLIENT_ID!,
@@ -21,18 +24,19 @@ export const authOptions: NextAuthOptions = {
       }
       return token
     },
-    session: async ({ session, token }) => {
+    session: async ({ session, token, user }) => {
       if (session?.user) {
-        session.user.id = token.sub!
-        session.accessToken = token.accessToken
+        // When using database sessions, user.id comes from the database
+        // When using JWT sessions, we need to use token.sub
+        session.user.id = user?.id || token.sub!
+        if (token?.accessToken) {
+          session.accessToken = token.accessToken
+        }
       }
       return session
     },
   },
   pages: {
     signIn: '/',
-  },
-  session: {
-    strategy: 'jwt',
   },
 }
