@@ -32,11 +32,52 @@ export default function Home() {
     delete: string[]
   }>()
   const [isLoading, setIsLoading] = useState(false)
+  const [isLoadingSchedule, setIsLoadingSchedule] = useState(false)
+  const [activeTab, setActiveTab] = useState('schedule')
 
   // Initialize currentWeek on client side to avoid hydration mismatch
   useEffect(() => {
     setCurrentWeek(getWeekStart(new Date()))
   }, [])
+
+  // Load existing schedule when week changes
+  useEffect(() => {
+    if (currentWeek && session?.user?.id) {
+      loadWeekSchedule(currentWeek)
+    }
+  }, [currentWeek, session])
+
+  const loadWeekSchedule = async (week: Date) => {
+    setIsLoadingSchedule(true)
+    try {
+      const weekStartStr = week.toISOString().split('T')[0]
+      const response = await fetch(`/api/weeks/${weekStartStr}`)
+      
+      if (response.ok) {
+        const data = await response.json()
+        if (data.schedule) {
+          setSchedule(data.schedule)
+          console.log(`載入 ${weekStartStr} 週課表:`, data.totalEvents || Object.keys(data.schedule).length, '個時段')
+        } else {
+          // 沒有資料時重置為空課表
+          setSchedule(initializeEmptySchedule())
+        }
+      } else if (response.status === 404) {
+        // 404 表示該週沒有課表資料，重置為空課表
+        setSchedule(initializeEmptySchedule())
+      } else {
+        console.warn('載入週課表失敗:', response.status)
+        toast.error('載入週課表失敗')
+      }
+    } catch (error) {
+      console.error('載入週課表錯誤:', error)
+      toast.error('載入週課表失敗')
+      // 發生錯誤時也重置為空課表
+      setSchedule(initializeEmptySchedule())
+    } finally {
+      setIsLoadingSchedule(false)
+    }
+  }
 
   const handlePreview = async () => {
     if (!currentWeek) return
@@ -76,6 +117,10 @@ export default function Home() {
     try {
       const weekStartStr = currentWeek.toISOString().split('T')[0]
       
+      // 先保存當前課表資料
+      await saveScheduleData(weekStartStr, schedule)
+      
+      // 然後同步到 Google Calendar
       const response = await fetch(`/api/weeks/${weekStartStr}/sync`, {
         method: 'POST',
         headers: {
@@ -97,9 +142,32 @@ export default function Home() {
       setPreviewChanges(undefined)
     } catch (error) {
       console.error('Sync failed:', error)
-      toast.error(`同步失敗：${error.message}`)
+      const errorMessage = error instanceof Error ? error.message : '未知錯誤'
+      toast.error(`同步失敗：${errorMessage}`)
     } finally {
       setIsLoading(false)
+    }
+  }
+
+  const saveScheduleData = async (weekStartStr: string, scheduleData: WeekSchedule) => {
+    try {
+      const response = await fetch('/api/weeks', {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          userId: session?.user?.id,
+          weekStart: weekStartStr,
+          data: scheduleData
+        }),
+      })
+
+      if (!response.ok) {
+        console.warn('保存課表資料失敗:', response.status)
+      }
+    } catch (error) {
+      console.warn('保存課表資料錯誤:', error)
     }
   }
 
@@ -120,8 +188,9 @@ export default function Home() {
       <div className="container mx-auto p-6 flex items-center justify-center min-h-screen">
         <div className="text-center space-y-6">
           <div>
-            <h1 className="text-3xl font-bold mb-2">排課系統 × Google Calendar 同步</h1>
-            <p className="text-muted-foreground">請先登入 Google 帳號以開始使用</p>
+            <h1 className="text-3xl font-bold mb-2">ClassSync</h1>
+            <p className="text-muted-foreground mb-2">請先登入 Google 帳號以開始使用</p>
+            <p className="text-sm text-blue-600 font-medium">建議使用 T-school 學校帳號登入</p>
           </div>
           <AuthButton />
         </div>
@@ -130,38 +199,76 @@ export default function Home() {
   }
 
   return (
-    <div className="container mx-auto p-4 sm:p-6 space-y-6">
-      <header className="flex flex-col sm:flex-row sm:justify-between sm:items-start gap-4">
-        <div>
-          <h1 className="text-2xl sm:text-3xl font-bold">排課系統 × Google Calendar 同步</h1>
-          <p className="text-muted-foreground mt-2 text-sm sm:text-base">管理週課表並同步至 Google Calendar</p>
+    <div className="min-h-screen">
+      <nav className="fixed top-0 left-0 right-0 z-50 border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
+        <div className="container mx-auto px-4">
+          <div className="flex h-16 items-center justify-between">
+            <div className="flex items-center space-x-8">
+              <h1 className="text-xl font-bold">ClassSync</h1>
+              
+              <Tabs value={activeTab} onValueChange={setActiveTab} className="hidden md:block">
+                <TabsList>
+                  <TabsTrigger value="schedule">週課表</TabsTrigger>
+                  <TabsTrigger value="courses">課程庫</TabsTrigger>
+                  <TabsTrigger value="rooms">教室庫</TabsTrigger>
+                </TabsList>
+              </Tabs>
+            </div>
+            
+            <div className="flex items-center space-x-4">
+              <AuthButton />
+            </div>
+          </div>
+          
+          {/* Mobile navigation */}
+          <div className="md:hidden pb-4">
+            <Tabs value={activeTab} onValueChange={setActiveTab}>
+              <TabsList className="w-full">
+                <TabsTrigger value="schedule" className="flex-1">週課表</TabsTrigger>
+                <TabsTrigger value="courses" className="flex-1">課程庫</TabsTrigger>
+                <TabsTrigger value="rooms" className="flex-1">教室庫</TabsTrigger>
+              </TabsList>
+            </Tabs>
+          </div>
         </div>
-        <div className="sm:flex-shrink-0">
-          <AuthButton />
-        </div>
-      </header>
+      </nav>
 
-      <Tabs defaultValue="schedule" className="space-y-4">
-        <TabsList>
-          <TabsTrigger value="schedule">週課表</TabsTrigger>
-          <TabsTrigger value="courses">課程庫</TabsTrigger>
-          <TabsTrigger value="rooms">教室庫</TabsTrigger>
-        </TabsList>
+      <main className="container mx-auto p-4 sm:p-6 pt-20 md:pt-24">
+        <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
 
         <TabsContent value="schedule" className="space-y-6">
           {currentWeek && (
             <>
               <WeekNavigation 
                 currentWeek={currentWeek}
-                onWeekChange={setCurrentWeek}
+                onWeekChange={(newWeek) => {
+                  setCurrentWeek(newWeek)
+                  setPreviewChanges(undefined) // 清除預覽資料
+                }}
               />
               
-              <ScheduleTable
-                schedule={schedule}
-                courses={courses}
-                onScheduleChange={setSchedule}
-                currentWeek={currentWeek}
-              />
+              {isLoadingSchedule ? (
+                <div className="flex items-center justify-center py-12">
+                  <div className="text-center">
+                    <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-gray-900 mx-auto mb-4"></div>
+                    <p className="text-muted-foreground">載入週課表中...</p>
+                  </div>
+                </div>
+              ) : (
+                <ScheduleTable
+                  schedule={schedule}
+                  courses={courses}
+                  onScheduleChange={(newSchedule) => {
+                    setSchedule(newSchedule)
+                    // 自動保存課表變更 (debounced)
+                    if (currentWeek) {
+                      const weekStartStr = currentWeek.toISOString().split('T')[0]
+                      setTimeout(() => saveScheduleData(weekStartStr, newSchedule), 1000)
+                    }
+                  }}
+                  currentWeek={currentWeek}
+                />
+              )}
               
               <ScheduleActions
                 onPreview={handlePreview}
@@ -183,7 +290,8 @@ export default function Home() {
         <TabsContent value="rooms" className="space-y-4">
           <RoomManager />
         </TabsContent>
-      </Tabs>
+        </Tabs>
+      </main>
     </div>
   )
 }

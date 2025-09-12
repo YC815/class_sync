@@ -3,7 +3,7 @@
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
-import { Calendar, Plus, Minus } from 'lucide-react'
+import { Calendar, Plus, Minus, Loader2 } from 'lucide-react'
 import { ScheduleEvent } from '@/lib/types'
 
 interface ScheduleActionsProps {
@@ -35,8 +35,9 @@ export default function ScheduleActions({
           variant="outline" 
           onClick={onPreview}
           disabled={isLoading}
-          className="w-full sm:w-auto"
+          className="w-full sm:w-auto gap-2"
         >
+          {isLoading && <Loader2 className="w-4 h-4 animate-spin" />}
           預覽同步
         </Button>
         
@@ -45,11 +46,34 @@ export default function ScheduleActions({
           disabled={isLoading || totalChanges === 0}
           className="gap-2 w-full sm:w-auto"
         >
-          <Calendar className="w-4 h-4" />
-          <span className="hidden sm:inline">同步到 Google Calendar</span>
-          <span className="sm:hidden">同步</span>
+          {isLoading ? (
+            <Loader2 className="w-4 h-4 animate-spin" />
+          ) : (
+            <Calendar className="w-4 h-4" />
+          )}
+          <span className="hidden sm:inline">
+            {isLoading ? '正在同步到 Google Calendar...' : '同步到 Google Calendar'}
+          </span>
+          <span className="sm:hidden">
+            {isLoading ? '同步中...' : '同步'}
+          </span>
         </Button>
       </div>
+
+      {/* Loading Status */}
+      {isLoading && (
+        <Card className="border-blue-200 bg-blue-50">
+          <CardContent className="p-4">
+            <div className="flex items-center gap-3">
+              <Loader2 className="w-5 h-5 animate-spin text-blue-600" />
+              <div>
+                <div className="font-medium text-blue-900">正在同步課表...</div>
+                <div className="text-sm text-blue-700">請不要關閉頁面，等待同步完成</div>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
       {/* Preview Changes */}
       {previewChanges && totalChanges > 0 && (

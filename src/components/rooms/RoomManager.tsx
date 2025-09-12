@@ -33,8 +33,6 @@ interface Room {
   id: string
   name: string
   base: string
-  capacity?: number
-  equipment?: string[]
 }
 
 interface RoomManagerProps {
@@ -50,9 +48,7 @@ export default function RoomManager({
   const [editingRoom, setEditingRoom] = useState<Room | null>(null)
   const [formData, setFormData] = useState({
     name: '',
-    base: '',
-    capacity: '',
-    equipment: ''
+    base: ''
   })
 
   // 初始化預設教室數據
@@ -60,14 +56,12 @@ export default function RoomManager({
     ...ROOMS_BY_BASE.hongdao.map(room => ({
       id: `hongdao-${room}`,
       name: room,
-      base: 'hongdao',
-      capacity: 30
+      base: 'hongdao'
     })),
     ...ROOMS_BY_BASE.jilin.map(room => ({
       id: `jilin-${room}`,
       name: room,
-      base: 'jilin',
-      capacity: 25
+      base: 'jilin'
     }))
   ]
 
@@ -81,9 +75,7 @@ export default function RoomManager({
     const roomData: Room = {
       id: editingRoom?.id || `${formData.base}-${formData.name}-${Date.now()}`,
       name: formData.name,
-      base: formData.base,
-      capacity: formData.capacity ? parseInt(formData.capacity) : undefined,
-      equipment: formData.equipment ? formData.equipment.split(',').map(s => s.trim()) : undefined
+      base: formData.base
     }
 
     let newRooms
@@ -104,9 +96,7 @@ export default function RoomManager({
     setEditingRoom(room)
     setFormData({
       name: room.name,
-      base: room.base,
-      capacity: room.capacity?.toString() || '',
-      equipment: room.equipment?.join(', ') || ''
+      base: room.base
     })
     setIsDialogOpen(true)
   }
@@ -121,9 +111,7 @@ export default function RoomManager({
   const resetForm = () => {
     setFormData({
       name: '',
-      base: '',
-      capacity: '',
-      equipment: ''
+      base: ''
     })
     setEditingRoom(null)
   }
@@ -191,26 +179,6 @@ export default function RoomManager({
                 </Select>
               </div>
 
-              <div className="space-y-2">
-                <Label htmlFor="capacity">容納人數</Label>
-                <Input
-                  id="capacity"
-                  type="number"
-                  value={formData.capacity}
-                  onChange={(e) => setFormData(prev => ({ ...prev, capacity: e.target.value }))}
-                  placeholder="例如：30"
-                />
-              </div>
-
-              <div className="space-y-2">
-                <Label htmlFor="equipment">設備 (用逗號分隔)</Label>
-                <Input
-                  id="equipment"
-                  value={formData.equipment}
-                  onChange={(e) => setFormData(prev => ({ ...prev, equipment: e.target.value }))}
-                  placeholder="例如：投影機, 白板, 電腦"
-                />
-              </div>
 
               <div className="flex justify-end gap-2">
                 <Button 
@@ -257,8 +225,6 @@ export default function RoomManager({
                 <TableHeader>
                   <TableRow>
                     <TableHead>教室名稱</TableHead>
-                    <TableHead>容納人數</TableHead>
-                    <TableHead>設備</TableHead>
                     <TableHead className="text-right">操作</TableHead>
                   </TableRow>
                 </TableHeader>
@@ -267,12 +233,6 @@ export default function RoomManager({
                     <TableRow key={room.id}>
                       <TableCell className="font-medium">
                         {room.name}
-                      </TableCell>
-                      <TableCell>
-                        {room.capacity ? `${room.capacity} 人` : '未設定'}
-                      </TableCell>
-                      <TableCell>
-                        {room.equipment ? room.equipment.join(', ') : '無'}
                       </TableCell>
                       <TableCell className="text-right">
                         <div className="flex justify-end gap-2">

@@ -2,10 +2,24 @@ import { WeekSchedule, ScheduleEvent } from './types'
 
 export function getWeekStart(date: Date): Date {
   const d = new Date(date)
-  const day = d.getDay()
-  const diff = d.getDate() - day + (day === 0 ? -6 : 1) // Adjust when day is sunday
-  d.setDate(diff)
+  const day = d.getDay() // 0 = Sunday, 1 = Monday, ..., 6 = Saturday
+  
+  // Calculate days to subtract to get to Monday
+  // If today is Sunday (0), we need to go back 6 days to get previous Monday
+  // If today is Monday (1), we need to go back 0 days
+  // If today is Tuesday (2), we need to go back 1 day, etc.
+  const diff = day === 0 ? -6 : -(day - 1)
+  
+  d.setDate(d.getDate() + diff)
   d.setHours(0, 0, 0, 0)
+  
+  console.log('getWeekStart:', {
+    inputDate: date.toISOString(),
+    dayOfWeek: day,
+    diff: diff,
+    weekStart: d.toISOString()
+  })
+  
   return d
 }
 
@@ -92,17 +106,46 @@ export function validateScheduleData(schedule: WeekSchedule): string[] {
   
   Object.keys(schedule).forEach(day => {
     const dayNum = parseInt(day)
-    if (dayNum < 1 || dayNum > 5) {
-      errors.push(`Invalid weekday: ${day}`)
+    if (isNaN(dayNum) || dayNum < 1 || dayNum > 5) {
+      errors.push(`Invalid weekday: ${day} (must be 1-5 for Mon-Fri)`)
     }
     
-    Object.keys(schedule[dayNum]).forEach(period => {
-      const periodNum = parseInt(period)
-      if (periodNum < 1 || periodNum > 8) {
-        errors.push(`Invalid period: ${period} on day ${day}`)
-      }
-    })
+    if (schedule[dayNum]) {
+      Object.keys(schedule[dayNum]).forEach(period => {
+        const periodNum = parseInt(period)
+        if (isNaN(periodNum) || periodNum < 1 || periodNum > 8) {
+          errors.push(`Invalid period: ${period} on day ${day} (must be 1-8)`)
+        }
+      })
+    }
   })
+  
+  return errors
+}
+
+// 新增：驗證和清理 ScheduleEvent
+export function validateScheduleEvent(event: ScheduleEvent): string[] {
+  const errors: string[] = []
+  
+  if (!event.weekday || event.weekday < 1 || event.weekday > 5) {
+    errors.push(`Invalid weekday: ${event.weekday} (must be 1-5)`)
+  }
+  
+  if (!event.periodStart || event.periodStart < 1 || event.periodStart > 8) {
+    errors.push(`Invalid periodStart: ${event.periodStart} (must be 1-8)`)
+  }
+  
+  if (!event.periodEnd || event.periodEnd < 1 || event.periodEnd > 8) {
+    errors.push(`Invalid periodEnd: ${event.periodEnd} (must be 1-8)`)
+  }
+  
+  if (event.periodStart > event.periodEnd) {
+    errors.push(`periodStart (${event.periodStart}) cannot be greater than periodEnd (${event.periodEnd})`)
+  }
+  
+  if (!event.courseName && !event.courseId) {
+    errors.push('Course name or ID is required')
+  }
   
   return errors
 }

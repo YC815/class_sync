@@ -8,9 +8,12 @@ import { ScheduleEvent } from '@/lib/types'
 
 export async function POST(
   request: NextRequest,
-  { params }: { params: { weekStart: string } }
+  { params }: { params: Promise<{ weekStart: string }> | { weekStart: string } }
 ) {
   try {
+    const resolvedParams = await params
+    const weekStartStr = resolvedParams.weekStart
+    
     const session = await getServerSession(authOptions)
     if (!session?.user?.id) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
@@ -22,8 +25,10 @@ export async function POST(
       return NextResponse.json({ error: 'Schedule data is required' }, { status: 400 })
     }
 
-    const weekStart = new Date(params.weekStart)
+    const weekStart = new Date(weekStartStr)
     const userId = session.user.id
+    
+    console.log('Previewing changes for week:', weekStartStr, 'userId:', userId)
     
     // Get existing events for this week from database
     const existingEvents = await prisma.event.findMany({
@@ -117,6 +122,6 @@ export async function POST(
     })
   } catch (error) {
     console.error('Error generating preview:', error)
-    return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
+    return NextResponse.json({ error: '預覽失敗，請重試' }, { status: 500 })
   }
 }
