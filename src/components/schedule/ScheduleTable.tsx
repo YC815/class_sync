@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import React, { useState } from 'react'
 import { 
   Table, 
   TableBody, 
@@ -35,16 +35,12 @@ interface ScheduleTableProps {
   schedule: WeekSchedule
   courses: Course[]
   onScheduleChange: (schedule: WeekSchedule) => void
-  currentLocation?: LocationBase
-  onLocationChange: (location: LocationBase | undefined) => void
 }
 
 export default function ScheduleTable({ 
   schedule, 
   courses, 
-  onScheduleChange,
-  currentLocation,
-  onLocationChange 
+  onScheduleChange
 }: ScheduleTableProps) {
   const updateCell = (day: number, period: number, data: ScheduleCell | null) => {
     const newSchedule = { ...schedule }
@@ -67,11 +63,18 @@ export default function ScheduleTable({
             <Link className="w-3 h-3 text-blue-500" />
           )}
         </div>
-        {cell.location && (
-          <Badge variant="secondary" className="text-xs">
-            {cell.location}
-          </Badge>
-        )}
+        <div className="flex gap-1 flex-wrap">
+          {cell.location && (
+            <Badge variant="secondary" className="text-xs">
+              {cell.location}
+            </Badge>
+          )}
+          {cell.venue && (
+            <Badge variant="outline" className="text-xs">
+              {cell.venue}
+            </Badge>
+          )}
+        </div>
       </div>
     )
   }
@@ -88,8 +91,7 @@ export default function ScheduleTable({
       if (courseName) {
         updateCell(day, period, {
           courseName,
-          isTemporary: true,
-          location: currentLocation ? `${currentLocation}` : undefined
+          isTemporary: true
         })
       }
       return
@@ -100,32 +102,23 @@ export default function ScheduleTable({
       updateCell(day, period, {
         courseId: course.id,
         courseName: course.name,
-        url: course.defaultUrl,
-        location: currentLocation ? `${currentLocation}` : undefined
+        url: course.defaultUrl
       })
     }
   }
 
+  const handleVenueSelect = (day: number, period: number, venue: string) => {
+    const currentCell = schedule[day]?.[period]
+    if (!currentCell) return
+    
+    updateCell(day, period, {
+      ...currentCell,
+      venue: venue === 'none' ? undefined : venue
+    })
+  }
+
   return (
     <div className="space-y-4">
-      {/* Location Selector */}
-      <div className="flex items-center gap-2">
-        <span className="text-sm font-medium">本次地點：</span>
-        <Select 
-          value={currentLocation || 'none'} 
-          onValueChange={(value) => onLocationChange(value === 'none' ? undefined : value as LocationBase)}
-        >
-          <SelectTrigger className="w-32">
-            <SelectValue placeholder="選擇地點" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="none">無</SelectItem>
-            <SelectItem value="弘道">弘道</SelectItem>
-            <SelectItem value="吉林">吉林</SelectItem>
-          </SelectContent>
-        </Select>
-      </div>
-
       {/* Schedule Table */}
       <div className="border rounded-lg overflow-auto">
         <Table className="min-w-[800px]">
@@ -142,44 +135,83 @@ export default function ScheduleTable({
           </TableHeader>
           <TableBody>
             {PERIODS.map(period => (
-              <TableRow key={period}>
-                <TableCell className="font-medium text-center">
-                  {period}
-                </TableCell>
-                <TableCell className="text-xs text-muted-foreground">
-                  {PERIOD_TIMES[period as keyof typeof PERIOD_TIMES]}
-                </TableCell>
-                {WEEKDAYS.map((_, dayIndex) => {
-                  const day = dayIndex + 1
-                  const cell = schedule[day]?.[period]
-                  
-                  return (
-                    <TableCell key={`${day}-${period}`} className="p-1 sm:p-2">
-                      <Select
-                        value={cell?.courseId || (cell?.isTemporary ? 'temp' : 'none')}
-                        onValueChange={(value) => handleCourseSelect(day, period, value)}
-                      >
-                        <SelectTrigger className="w-full h-auto min-h-8 border-dashed text-xs">
-                          <SelectValue>
-                            {cell ? getCellContent(day, period) : (
-                              <span className="text-muted-foreground text-xs">選擇課程</span>
-                            )}
-                          </SelectValue>
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="none">無課程</SelectItem>
-                          {courses.map(course => (
-                            <SelectItem key={course.id} value={course.id}>
-                              {course.name}
-                            </SelectItem>
-                          ))}
-                          <SelectItem value="other">其他...</SelectItem>
-                        </SelectContent>
-                      </Select>
+              <React.Fragment key={period}>
+                <TableRow>
+                  <TableCell className="font-medium text-center">
+                    {period}
+                  </TableCell>
+                  <TableCell className="text-xs text-muted-foreground">
+                    {PERIOD_TIMES[period as keyof typeof PERIOD_TIMES]}
+                  </TableCell>
+                  {WEEKDAYS.map((_, dayIndex) => {
+                    const day = dayIndex + 1
+                    const cell = schedule[day]?.[period]
+                    
+                    return (
+                      <TableCell key={`${day}-${period}`} className="p-1 sm:p-2">
+                        <div className="space-y-1">
+                          <Select
+                            value={cell?.courseId || (cell?.isTemporary ? 'temp' : 'none')}
+                            onValueChange={(value) => handleCourseSelect(day, period, value)}
+                          >
+                            <SelectTrigger className="w-full h-auto min-h-8 border-dashed text-xs">
+                              <SelectValue>
+                                {cell ? getCellContent(day, period) : (
+                                  <span className="text-muted-foreground text-xs">選擇課程</span>
+                                )}
+                              </SelectValue>
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="none">無課程</SelectItem>
+                              {courses.map(course => (
+                                <SelectItem key={course.id} value={course.id}>
+                                  {course.name}
+                                </SelectItem>
+                              ))}
+                              <SelectItem value="other">其他...</SelectItem>
+                            </SelectContent>
+                          </Select>
+                          {cell && (
+                            <Select
+                              value={cell.venue || 'none'}
+                              onValueChange={(value) => handleVenueSelect(day, period, value)}
+                            >
+                              <SelectTrigger className="w-full h-6 text-xs">
+                                <SelectValue placeholder="場地" />
+                              </SelectTrigger>
+                              <SelectContent>
+                                <SelectItem value="none">無場地</SelectItem>
+                                {Object.entries(LOCATIONS).map(([base, rooms]) => 
+                                  rooms.map(room => (
+                                    <SelectItem key={`${base}-${room}`} value={`${base}${room}`}>
+                                      {base}{room}
+                                    </SelectItem>
+                                  ))
+                                )}
+                              </SelectContent>
+                            </Select>
+                          )}
+                        </div>
+                      </TableCell>
+                    )
+                  })}
+                </TableRow>
+                {period === 4 && (
+                  <TableRow className="bg-yellow-50/50">
+                    <TableCell className="font-medium text-center text-yellow-700">
+                      中
                     </TableCell>
-                  )
-                })}
-              </TableRow>
+                    <TableCell className="text-xs text-yellow-600">
+                      11:55-13:25
+                    </TableCell>
+                    {WEEKDAYS.map((_, dayIndex) => (
+                      <TableCell key={`lunch-${dayIndex}`} className="text-center text-yellow-600 text-xs font-medium">
+                        午間休息
+                      </TableCell>
+                    ))}
+                  </TableRow>
+                )}
+              </React.Fragment>
             ))}
           </TableBody>
         </Table>

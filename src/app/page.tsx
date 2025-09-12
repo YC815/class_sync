@@ -8,7 +8,7 @@ import WeekNavigation from '@/components/schedule/WeekNavigation'
 import ScheduleActions from '@/components/schedule/ScheduleActions'
 import CourseManager from '@/components/courses/CourseManager'
 import AuthButton from '@/components/auth/AuthButton'
-import { WeekSchedule, Course, LocationBase, ScheduleEvent } from '@/lib/types'
+import { WeekSchedule, Course, ScheduleEvent } from '@/lib/types'
 import { getWeekStart, initializeEmptySchedule } from '@/lib/schedule-utils'
 
 // Mock data for development
@@ -24,7 +24,6 @@ export default function Home() {
   const [currentWeek, setCurrentWeek] = useState<Date | null>(null)
   const [schedule, setSchedule] = useState<WeekSchedule>(initializeEmptySchedule())
   const [courses, setCourses] = useState<Course[]>(mockCourses)
-  const [currentLocation, setCurrentLocation] = useState<LocationBase>()
   const [previewChanges, setPreviewChanges] = useState<{
     create: ScheduleEvent[]
     update: ScheduleEvent[]
@@ -50,8 +49,7 @@ export default function Home() {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          scheduleData: schedule,
-          currentLocation
+          scheduleData: schedule
         }),
       })
 
@@ -172,8 +170,6 @@ export default function Home() {
                 schedule={schedule}
                 courses={courses}
                 onScheduleChange={setSchedule}
-                currentLocation={currentLocation}
-                onLocationChange={setCurrentLocation}
               />
               
               <ScheduleActions

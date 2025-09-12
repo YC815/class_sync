@@ -10,6 +10,7 @@ export interface ScheduleCell {
   location?: string
   url?: string
   isTemporary?: boolean
+  venue?: string
 }
 
 export interface WeekSchedule {
@@ -34,14 +35,14 @@ export const WEEKDAYS = ['週一', '週二', '週三', '週四', '週五']
 export const PERIODS = [1, 2, 3, 4, 5, 6, 7, 8]
 
 export const PERIOD_TIMES = {
-  1: '08:25-09:10',
-  2: '09:20-10:05', 
-  3: '10:15-11:00',
-  4: '11:10-11:55',
-  5: '13:15-14:00',
-  6: '14:10-14:55',
-  7: '15:05-15:50',
-  8: '16:00-16:45'
+  1: '08:25-09:15',
+  2: '09:15-10:05',
+  3: '10:15-11:05',
+  4: '11:05-11:55',
+  5: '13:25-14:15',
+  6: '14:15-15:05',
+  7: '15:15-16:05',
+  8: '16:05-16:55'
 }
 
 export const LOCATIONS = {
