@@ -10,6 +10,7 @@ import {
   TableRow 
 } from '@/components/ui/table'
 import { Button } from '@/components/ui/button'
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { 
@@ -19,6 +20,13 @@ import {
   DialogTitle,
   DialogTrigger,
 } from '@/components/ui/dialog'
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select'
 import { Plus, Edit, Trash2, MapPin } from 'lucide-react'
 import { Base } from '@/lib/types'
 import { useSession } from 'next-auth/react'
@@ -34,8 +42,10 @@ export default function RoomManager() {
     name: '',
     address: '',
     placeId: '',
-    rooms: [''] // 至少一個教室輸入框
+    isSingleRoom: false,
+    rooms: [] as string[]
   })
+  const [currentRoomInput, setCurrentRoomInput] = useState('')
 
   // 載入基地資料
   useEffect(() => {
@@ -64,13 +74,12 @@ export default function RoomManager() {
     setIsLoading(true)
     
     try {
-      const validRooms = formData.rooms.filter(room => room.trim())
-      
       const baseData = {
         name: formData.name.trim(),
         address: formData.address.trim() || undefined,
         placeId: formData.placeId.trim() || undefined,
-        rooms: validRooms.length > 0 ? validRooms : undefined
+        isSingleRoom: formData.isSingleRoom,
+        rooms: formData.isSingleRoom ? undefined : (formData.rooms.length > 0 ? formData.rooms : undefined)
       }
 
       let response
@@ -114,10 +123,12 @@ export default function RoomManager() {
       name: base.name,
       address: base.address || '',
       placeId: base.placeId || '',
+      isSingleRoom: base.isSingleRoom || false,
       rooms: base.rooms && base.rooms.length > 0 
         ? base.rooms.map(room => room.name)
-        : ['']
+        : []
     })
+    setCurrentRoomInput('')
     setIsDialogOpen(true)
   }
 
@@ -146,28 +157,25 @@ export default function RoomManager() {
       name: '',
       address: '',
       placeId: '',
-      rooms: ['']
+      isSingleRoom: false,
+      rooms: []
     })
+    setCurrentRoomInput('')
     setEditingBase(null)
   }
 
-  const addRoomField = () => {
-    setFormData({
-      ...formData,
-      rooms: [...formData.rooms, '']
-    })
-  }
-
-  const removeRoomField = (index: number) => {
-    if (formData.rooms.length > 1) {
-      const newRooms = formData.rooms.filter((_, i) => i !== index)
-      setFormData({ ...formData, rooms: newRooms })
+  const addRoom = () => {
+    if (currentRoomInput.trim()) {
+      setFormData({
+        ...formData,
+        rooms: [...formData.rooms, currentRoomInput.trim()]
+      })
+      setCurrentRoomInput('')
     }
   }
 
-  const updateRoomField = (index: number, value: string) => {
-    const newRooms = [...formData.rooms]
-    newRooms[index] = value
+  const removeRoom = (index: number) => {
+    const newRooms = formData.rooms.filter((_, i) => i !== index)
     setFormData({ ...formData, rooms: newRooms })
   }
 
@@ -222,40 +230,92 @@ export default function RoomManager() {
                   placeholder="Google Places API ID（選填）"
                 />
               </div>
-              
-              <div>
-                <Label>教室列表</Label>
-                <div className="space-y-2">
-                  {formData.rooms.map((room, index) => (
-                    <div key={index} className="flex gap-2">
-                      <Input
-                        value={room}
-                        onChange={(e) => updateRoomField(index, e.target.value)}
-                        placeholder="教室名稱（如：201、A1）"
-                      />
-                      <Button
-                        type="button"
-                        variant="outline"
-                        size="sm"
-                        onClick={() => removeRoomField(index)}
-                        disabled={formData.rooms.length === 1}
-                      >
-                        <Trash2 className="w-4 h-4" />
-                      </Button>
-                    </div>
-                  ))}
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="sm"
-                    onClick={addRoomField}
-                    className="w-full"
-                  >
-                    <Plus className="w-4 h-4 mr-1" />
-                    新增教室
-                  </Button>
-                </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="baseType">基地類型 *</Label>
+                <Select
+                  value={formData.isSingleRoom ? 'single' : 'multiple'}
+                  onValueChange={(value) => setFormData(prev => ({ 
+                    ...prev, 
+                    isSingleRoom: value === 'single',
+                    rooms: value === 'single' ? [''] : prev.rooms
+                  }))}
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="選擇基地類型" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="single">單教室基地</SelectItem>
+                    <SelectItem value="multiple">多教室基地</SelectItem>
+                  </SelectContent>
+                </Select>
+                <p className="text-xs text-muted-foreground">
+                  單教室基地不需要填寫教室列表，選擇課程時也不會出現教室選項
+                </p>
               </div>
+              
+              {!formData.isSingleRoom && (
+                <div>
+                  <Label>教室列表</Label>
+                  <div className="border rounded-lg bg-muted/20">
+                    {/* 可捲動的已添加教室區域 */}
+                    {formData.rooms.length > 0 && (
+                      <div className="p-3 max-h-32 overflow-y-auto border-b">
+                        <div className="grid grid-cols-2 gap-2">
+                          {formData.rooms.map((room, index) => (
+                            <div key={index} className="flex items-center justify-between bg-background border rounded-md px-2 py-1.5 shadow-sm">
+                              <span className="text-xs font-medium truncate">{room}</span>
+                              <Button
+                                type="button"
+                                variant="ghost"
+                                size="sm"
+                                onClick={() => removeRoom(index)}
+                                className="h-5 w-5 p-0 text-muted-foreground hover:text-destructive ml-1 flex-shrink-0"
+                              >
+                                <Trash2 className="w-2.5 h-2.5" />
+                              </Button>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                    
+                    {/* 新增教室輸入框 - 固定在底部 */}
+                    <div className="p-3 space-y-2">
+                      <div className="flex gap-2">
+                        <Input
+                          value={currentRoomInput}
+                          onChange={(e) => setCurrentRoomInput(e.target.value)}
+                          placeholder="輸入新教室名稱..."
+                          className="flex-1"
+                          onKeyDown={(e) => {
+                            if (e.key === 'Enter' && currentRoomInput.trim()) {
+                              e.preventDefault();
+                              addRoom();
+                            }
+                          }}
+                        />
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          onClick={addRoom}
+                          disabled={!currentRoomInput.trim()}
+                        >
+                          <Plus className="w-4 h-4" />
+                        </Button>
+                      </div>
+                      
+                      {/* 空狀態提示 */}
+                      {formData.rooms.length === 0 && (
+                        <p className="text-xs text-muted-foreground text-center">
+                          輸入教室名稱後點擊 + 號添加，或按 Enter 鍵快速添加
+                        </p>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              )}
 
               <div className="flex justify-end gap-2">
                 <Button 
@@ -274,72 +334,91 @@ export default function RoomManager() {
         </Dialog>
       </div>
 
-      <div className="space-y-6">
+      <div className="grid gap-6">
         {bases.map((base) => (
-          <div key={base.id} className="space-y-3">
-            <div className="flex items-start justify-between">
-              <div>
-                <h3 className="text-lg font-semibold">{base.name}</h3>
-                {base.address && (
-                  <div className="flex items-center gap-1 text-sm text-muted-foreground">
-                    <MapPin className="w-3 h-3" />
-                    <span>{base.address}</span>
-                  </div>
-                )}
-                {base.placeId && (
-                  <div className="text-xs text-muted-foreground">
-                    Place ID: {base.placeId}
-                  </div>
-                )}
+          <Card key={base.id}>
+            <CardHeader>
+              <div className="flex items-start justify-between">
+                <div className="space-y-2">
+                  <CardTitle className="text-xl">{base.name}</CardTitle>
+                  {base.address && (
+                    <div className="flex items-center gap-1 text-sm text-muted-foreground">
+                      <MapPin className="w-4 h-4" />
+                      <span>{base.address}</span>
+                    </div>
+                  )}
+                  {base.placeId && (
+                    <div className="text-xs text-muted-foreground">
+                      Place ID: {base.placeId}
+                    </div>
+                  )}
+                  {base.isSingleRoom && (
+                    <div className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
+                      📍 單教室基地
+                    </div>
+                  )}
+                </div>
+                <div className="flex gap-2">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => handleEdit(base)}
+                  >
+                    <Edit className="w-4 h-4" />
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => handleDelete(base.id)}
+                  >
+                    <Trash2 className="w-4 h-4" />
+                  </Button>
+                </div>
               </div>
-              <div className="flex gap-2">
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => handleEdit(base)}
-                >
-                  <Edit className="w-4 h-4" />
-                </Button>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => handleDelete(base.id)}
-                >
-                  <Trash2 className="w-4 h-4" />
-                </Button>
-              </div>
-            </div>
+            </CardHeader>
             
-            {base.rooms && base.rooms.length > 0 ? (
-              <div className="border rounded-lg overflow-hidden">
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>教室名稱</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {base.rooms.map((room) => (
-                      <TableRow key={room.id}>
-                        <TableCell className="font-medium">
-                          {room.name}
-                        </TableCell>
+            <CardContent>
+              {base.isSingleRoom ? (
+                <div className="text-sm text-muted-foreground italic">
+                  單教室基地，無需設定教室列表
+                </div>
+              ) : base.rooms && base.rooms.length > 0 ? (
+                <div className="rounded-lg border overflow-hidden">
+                  <Table>
+                    <TableHeader>
+                      <TableRow className="bg-muted/50">
+                        <TableHead className="font-semibold text-foreground">
+                          教室名稱
+                        </TableHead>
                       </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
-              </div>
-            ) : (
-              <p className="text-sm text-muted-foreground ml-4">此基地尚無教室</p>
-            )}
-          </div>
+                    </TableHeader>
+                    <TableBody>
+                      {base.rooms.map((room) => (
+                        <TableRow key={room.id} className="hover:bg-muted/30">
+                          <TableCell className="font-medium py-3">
+                            {room.name}
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </div>
+              ) : (
+                <div className="text-sm text-muted-foreground italic">
+                  此基地尚無教室
+                </div>
+              )}
+            </CardContent>
+          </Card>
         ))}
         
         {bases.length === 0 && (
-          <div className="text-center py-12">
-            <h3 className="text-lg font-semibold mb-2">尚無基地</h3>
-            <p className="text-muted-foreground mb-4">點擊「新增基地」開始管理基地教室</p>
-          </div>
+          <Card>
+            <CardContent className="text-center py-12">
+              <h3 className="text-lg font-semibold mb-2">尚無基地</h3>
+              <p className="text-muted-foreground mb-4">點擊「新增基地」開始管理基地教室</p>
+            </CardContent>
+          </Card>
         )}
       </div>
     </div>

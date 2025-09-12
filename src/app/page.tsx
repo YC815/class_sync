@@ -10,7 +10,7 @@ import ScheduleActions from '@/components/schedule/ScheduleActions'
 import CourseManager from '@/components/courses/CourseManager'
 import RoomManager from '@/components/rooms/RoomManager'
 import AuthButton from '@/components/auth/AuthButton'
-import { WeekSchedule, Course, ScheduleEvent } from '@/lib/types'
+import { WeekSchedule, Course, Base, ScheduleEvent } from '@/lib/types'
 import { getWeekStart, initializeEmptySchedule } from '@/lib/schedule-utils'
 import { toast } from 'sonner'
 
@@ -20,6 +20,7 @@ export default function Home() {
   const [currentWeek, setCurrentWeek] = useState<Date | null>(null)
   const [schedule, setSchedule] = useState<WeekSchedule>(initializeEmptySchedule())
   const [courses, setCourses] = useState<Course[]>([])
+  const [bases, setBases] = useState<Base[]>([])
   const [previewChanges, setPreviewChanges] = useState<{
     create: ScheduleEvent[]
     update: ScheduleEvent[]
@@ -34,10 +35,11 @@ export default function Home() {
     setCurrentWeek(getWeekStart(new Date()))
   }, [])
 
-  // Load courses when user session is available
+  // Load courses and bases when user session is available
   useEffect(() => {
     if (session?.user?.id) {
       loadCourses()
+      loadBases()
     }
   }, [session])
 
@@ -51,6 +53,19 @@ export default function Home() {
     } catch (error) {
       console.error('Failed to load courses:', error)
       toast.error('載入課程失敗')
+    }
+  }
+
+  const loadBases = async () => {
+    try {
+      const response = await fetch('/api/bases')
+      if (response.ok) {
+        const data = await response.json()
+        setBases(data)
+      }
+    } catch (error) {
+      console.error('Failed to load bases:', error)
+      toast.error('載入基地失敗')
     }
   }
 
@@ -275,6 +290,7 @@ export default function Home() {
                     <ScheduleTable
                       schedule={schedule}
                       courses={courses}
+                      bases={bases}
                       onScheduleChange={(newSchedule) => {
                         setSchedule(newSchedule)
                         // 自動保存課表變更 (debounced)

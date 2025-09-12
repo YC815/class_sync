@@ -51,7 +51,7 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    const { name, address, placeId, rooms } = await request.json()
+    const { name, address, placeId, isSingleRoom, rooms } = await request.json()
 
     if (!name) {
       return NextResponse.json(
@@ -65,8 +65,9 @@ export async function POST(request: NextRequest) {
         name,
         address,
         placeId,
+        isSingleRoom: isSingleRoom || false,
         userId: session.user.id,
-        rooms: rooms && rooms.length > 0 ? {
+        rooms: (!isSingleRoom && rooms && rooms.length > 0) ? {
           create: rooms.map((roomName: string) => ({
             name: roomName,
             userId: session.user.id
@@ -86,7 +87,7 @@ export async function POST(request: NextRequest) {
   } catch (error) {
     console.error('Failed to create base:', error)
     return NextResponse.json(
-      { error: 'Internal server error' },
+      { error: 'Internal server error', details: error instanceof Error ? error.message : 'Unknown error' },
       { status: 500 }
     )
   }

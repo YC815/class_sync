@@ -18,6 +18,7 @@ export interface Base {
   name: string
   address?: string
   placeId?: string
+  isSingleRoom?: boolean
   rooms?: Room[]
   createdAt: Date
   updatedAt: Date

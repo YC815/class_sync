@@ -18,7 +18,7 @@ export async function PATCH(
       )
     }
 
-    const { name, address, placeId, rooms } = await request.json()
+    const { name, address, placeId, isSingleRoom, rooms } = await request.json()
     
     if (!name) {
       return NextResponse.json({ error: 'Name is required' }, { status: 400 })
@@ -50,7 +50,8 @@ export async function PATCH(
         name,
         address,
         placeId,
-        rooms: rooms && rooms.length > 0 ? {
+        isSingleRoom: isSingleRoom !== undefined ? isSingleRoom : false,
+        rooms: (!isSingleRoom && rooms && rooms.length > 0) ? {
           create: rooms.map((roomName: string) => ({
             name: roomName,
             userId: session.user.id
@@ -69,7 +70,10 @@ export async function PATCH(
     return NextResponse.json(base)
   } catch (error) {
     console.error('Error updating base:', error)
-    return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
+    return NextResponse.json({ 
+      error: 'Internal server error', 
+      details: error instanceof Error ? error.message : 'Unknown error' 
+    }, { status: 500 })
   }
 }
 

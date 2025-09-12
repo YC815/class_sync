@@ -21,6 +21,7 @@ import AddTempCourseDialog from './AddTempCourseDialog'
 import { 
   WeekSchedule, 
   Course, 
+  Base,
   ScheduleCell, 
   WEEKDAYS, 
   PERIODS, 
@@ -33,6 +34,7 @@ import {
 interface ScheduleTableProps {
   schedule: WeekSchedule
   courses: Course[]
+  bases: Base[]
   onScheduleChange: (schedule: WeekSchedule) => void
   currentWeek: Date
 }
@@ -40,6 +42,7 @@ interface ScheduleTableProps {
 export default function ScheduleTable({ 
   schedule, 
   courses, 
+  bases,
   onScheduleChange,
   currentWeek
 }: ScheduleTableProps) {
@@ -109,18 +112,18 @@ export default function ScheduleTable({
     }
   }
 
-  const handleBaseSelect = (day: number, period: number, baseValue: string) => {
+  const handleBaseSelect = (day: number, period: number, baseId: string) => {
     const currentCell = schedule[day]?.[period]
     if (!currentCell) return
     
-    const baseInfo = BASE_INFO[baseValue]
+    const base = bases.find(b => b.id === baseId)
     
     updateCell(day, period, {
       ...currentCell,
-      base: baseValue === 'none' ? undefined : baseValue,
+      base: baseId === 'none' ? undefined : base?.name,
       room: undefined, // 重設教室選擇
-      placeId: baseValue === 'none' ? undefined : baseInfo?.placeId,
-      address: baseValue === 'none' ? undefined : baseInfo?.address
+      placeId: baseId === 'none' ? undefined : base?.placeId,
+      address: baseId === 'none' ? undefined : base?.address
     })
   }
 
@@ -205,7 +208,11 @@ export default function ScheduleTable({
                           {cell && (
                             <>
                               <Select
-                                value={cell.base || 'none'}
+                                value={(() => {
+                                  if (!cell.base) return 'none'
+                                  const base = bases.find(b => b.name === cell.base)
+                                  return base?.id || 'none'
+                                })()}
                                 onValueChange={(value) => handleBaseSelect(day, period, value)}
                               >
                                 <SelectTrigger className="w-full h-6 text-xs">
@@ -213,31 +220,38 @@ export default function ScheduleTable({
                                 </SelectTrigger>
                                 <SelectContent>
                                   <SelectItem value="none">無基地</SelectItem>
-                                  {Object.entries(BASES).map(([baseName, baseValue]) => (
-                                    <SelectItem key={baseValue} value={baseValue}>
-                                      {baseName}
+                                  {bases.map((base) => (
+                                    <SelectItem key={base.id} value={base.id}>
+                                      {base.name}
                                     </SelectItem>
                                   ))}
                                 </SelectContent>
                               </Select>
-                              {cell.base && ROOMS_BY_BASE[cell.base as keyof typeof ROOMS_BY_BASE]?.length > 0 && (
-                                <Select
-                                  value={cell.room || 'none'}
-                                  onValueChange={(value) => handleRoomSelect(day, period, value)}
-                                >
-                                  <SelectTrigger className="w-full h-6 text-xs">
-                                    <SelectValue placeholder="選擇教室" />
-                                  </SelectTrigger>
-                                  <SelectContent>
-                                    <SelectItem value="none">無教室</SelectItem>
-                                    {ROOMS_BY_BASE[cell.base as keyof typeof ROOMS_BY_BASE].map(room => (
-                                      <SelectItem key={room} value={room}>
-                                        {room}
-                                      </SelectItem>
-                                    ))}
-                                  </SelectContent>
-                                </Select>
-                              )}
+                              {(() => {
+                                if (!cell.base) return null
+                                const base = bases.find(b => b.name === cell.base)
+                                if (!base || base.isSingleRoom) return null
+                                if (!base.rooms || base.rooms.length === 0) return null
+                                
+                                return (
+                                  <Select
+                                    value={cell.room || 'none'}
+                                    onValueChange={(value) => handleRoomSelect(day, period, value)}
+                                  >
+                                    <SelectTrigger className="w-full h-6 text-xs">
+                                      <SelectValue placeholder="選擇教室" />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                      <SelectItem value="none">無教室</SelectItem>
+                                      {base.rooms.map(room => (
+                                        <SelectItem key={room.id} value={room.name}>
+                                          {room.name}
+                                        </SelectItem>
+                                      ))}
+                                    </SelectContent>
+                                  </Select>
+                                )
+                              })()}
                             </>
                           )}
                         </div>
