@@ -3,13 +3,12 @@
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
-import { Calendar, Copy, Plus, Minus } from 'lucide-react'
+import { Calendar, Plus, Minus } from 'lucide-react'
 import { ScheduleEvent } from '@/lib/types'
 
 interface ScheduleActionsProps {
   onPreview: () => void
   onSync: () => void
-  onCopyWeek: () => void
   previewChanges?: {
     create: ScheduleEvent[]
     update: ScheduleEvent[]
@@ -21,7 +20,6 @@ interface ScheduleActionsProps {
 export default function ScheduleActions({
   onPreview,
   onSync,
-  onCopyWeek,
   previewChanges,
   isLoading = false
 }: ScheduleActionsProps) {
@@ -50,17 +48,6 @@ export default function ScheduleActions({
           <Calendar className="w-4 h-4" />
           <span className="hidden sm:inline">同步到 Google Calendar</span>
           <span className="sm:hidden">同步</span>
-        </Button>
-        
-        <Button 
-          variant="outline" 
-          onClick={onCopyWeek}
-          disabled={isLoading}
-          className="gap-2 w-full sm:w-auto"
-        >
-          <Copy className="w-4 h-4" />
-          <span className="hidden sm:inline">複製到下週</span>
-          <span className="sm:hidden">複製</span>
         </Button>
       </div>
 

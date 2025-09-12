@@ -16,9 +16,8 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select'
-import { Button } from '@/components/ui/button'
-import { Badge } from '@/components/ui/badge'
 import { Link } from 'lucide-react'
+import AddTempCourseDialog from './AddTempCourseDialog'
 import { 
   WeekSchedule, 
   Course, 
@@ -26,22 +25,40 @@ import {
   WEEKDAYS, 
   PERIODS, 
   PERIOD_TIMES,
-  LOCATIONS,
-  LocationBase 
+  BASES,
+  ROOMS_BY_BASE,
+  BASE_INFO
 } from '@/lib/types'
-import { initializeEmptySchedule } from '@/lib/schedule-utils'
 
 interface ScheduleTableProps {
   schedule: WeekSchedule
   courses: Course[]
   onScheduleChange: (schedule: WeekSchedule) => void
+  currentWeek: Date
 }
 
 export default function ScheduleTable({ 
   schedule, 
   courses, 
-  onScheduleChange
+  onScheduleChange,
+  currentWeek
 }: ScheduleTableProps) {
+  const [tempCourseDialog, setTempCourseDialog] = useState<{open: boolean, day: number, period: number}>({
+    open: false,
+    day: 0,
+    period: 0
+  })
+
+  // Calculate dates for each weekday
+  const getWeekdayDates = () => {
+    return WEEKDAYS.map((_, index) => {
+      const date = new Date(currentWeek)
+      date.setDate(currentWeek.getDate() + index)
+      return date.toLocaleDateString('zh-TW', { month: 'numeric', day: 'numeric' })
+    })
+  }
+
+  const weekdayDates = getWeekdayDates()
   const updateCell = (day: number, period: number, data: ScheduleCell | null) => {
     const newSchedule = { ...schedule }
     newSchedule[day] = { ...newSchedule[day], [period]: data }
@@ -56,25 +73,11 @@ export default function ScheduleTable({
     const displayName = cell.courseName || course?.name || '未知課程'
     
     return (
-      <div className="space-y-1">
-        <div className="flex items-center gap-1">
-          <span className="text-sm font-medium">{displayName}</span>
-          {(cell.url || course?.defaultUrl) && (
-            <Link className="w-3 h-3 text-blue-500" />
-          )}
-        </div>
-        <div className="flex gap-1 flex-wrap">
-          {cell.location && (
-            <Badge variant="secondary" className="text-xs">
-              {cell.location}
-            </Badge>
-          )}
-          {cell.venue && (
-            <Badge variant="outline" className="text-xs">
-              {cell.venue}
-            </Badge>
-          )}
-        </div>
+      <div className="flex items-center gap-1">
+        <span className="text-sm font-medium">{displayName}</span>
+        {(cell.url || course?.defaultUrl) && (
+          <Link className="w-3 h-3 text-blue-500" />
+        )}
       </div>
     )
   }
@@ -86,14 +89,11 @@ export default function ScheduleTable({
     }
 
     if (courseId === 'other') {
-      // TODO: Open dialog for temporary course
-      const courseName = prompt('請輸入臨時課程名稱：')
-      if (courseName) {
-        updateCell(day, period, {
-          courseName,
-          isTemporary: true
-        })
-      }
+      setTempCourseDialog({
+        open: true,
+        day,
+        period
+      })
       return
     }
 
@@ -102,18 +102,44 @@ export default function ScheduleTable({
       updateCell(day, period, {
         courseId: course.id,
         courseName: course.name,
-        url: course.defaultUrl
+        url: course.defaultUrl,
+        base: undefined, // 重設基地選擇
+        room: undefined  // 重設教室選擇
       })
     }
   }
 
-  const handleVenueSelect = (day: number, period: number, venue: string) => {
+  const handleBaseSelect = (day: number, period: number, baseValue: string) => {
+    const currentCell = schedule[day]?.[period]
+    if (!currentCell) return
+    
+    const baseInfo = BASE_INFO[baseValue]
+    
+    updateCell(day, period, {
+      ...currentCell,
+      base: baseValue === 'none' ? undefined : baseValue,
+      room: undefined, // 重設教室選擇
+      placeId: baseValue === 'none' ? undefined : baseInfo?.placeId,
+      address: baseValue === 'none' ? undefined : baseInfo?.address
+    })
+  }
+
+  const handleRoomSelect = (day: number, period: number, room: string) => {
     const currentCell = schedule[day]?.[period]
     if (!currentCell) return
     
     updateCell(day, period, {
       ...currentCell,
-      venue: venue === 'none' ? undefined : venue
+      room: room === 'none' ? undefined : room
+    })
+  }
+
+  const handleAddTempCourse = (courseName: string) => {
+    updateCell(tempCourseDialog.day, tempCourseDialog.period, {
+      courseName,
+      isTemporary: true,
+      base: undefined,
+      room: undefined
     })
   }
 
@@ -128,7 +154,12 @@ export default function ScheduleTable({
               <TableHead className="w-20 text-center text-xs">時間</TableHead>
               {WEEKDAYS.map((day, index) => (
                 <TableHead key={index} className="text-center min-w-32 px-2">
-                  {day}
+                  <div className="flex flex-col">
+                    <span>{day}</span>
+                    <span className="text-xs text-muted-foreground font-normal">
+                      {weekdayDates[index]}
+                    </span>
+                  </div>
                 </TableHead>
               ))}
             </TableRow>
@@ -172,24 +203,42 @@ export default function ScheduleTable({
                             </SelectContent>
                           </Select>
                           {cell && (
-                            <Select
-                              value={cell.venue || 'none'}
-                              onValueChange={(value) => handleVenueSelect(day, period, value)}
-                            >
-                              <SelectTrigger className="w-full h-6 text-xs">
-                                <SelectValue placeholder="場地" />
-                              </SelectTrigger>
-                              <SelectContent>
-                                <SelectItem value="none">無場地</SelectItem>
-                                {Object.entries(LOCATIONS).map(([base, rooms]) => 
-                                  rooms.map(room => (
-                                    <SelectItem key={`${base}-${room}`} value={`${base}${room}`}>
-                                      {base}{room}
+                            <>
+                              <Select
+                                value={cell.base || 'none'}
+                                onValueChange={(value) => handleBaseSelect(day, period, value)}
+                              >
+                                <SelectTrigger className="w-full h-6 text-xs">
+                                  <SelectValue placeholder="選擇基地" />
+                                </SelectTrigger>
+                                <SelectContent>
+                                  <SelectItem value="none">無基地</SelectItem>
+                                  {Object.entries(BASES).map(([baseName, baseValue]) => (
+                                    <SelectItem key={baseValue} value={baseValue}>
+                                      {baseName}
                                     </SelectItem>
-                                  ))
-                                )}
-                              </SelectContent>
-                            </Select>
+                                  ))}
+                                </SelectContent>
+                              </Select>
+                              {cell.base && ROOMS_BY_BASE[cell.base as keyof typeof ROOMS_BY_BASE]?.length > 0 && (
+                                <Select
+                                  value={cell.room || 'none'}
+                                  onValueChange={(value) => handleRoomSelect(day, period, value)}
+                                >
+                                  <SelectTrigger className="w-full h-6 text-xs">
+                                    <SelectValue placeholder="選擇教室" />
+                                  </SelectTrigger>
+                                  <SelectContent>
+                                    <SelectItem value="none">無教室</SelectItem>
+                                    {ROOMS_BY_BASE[cell.base as keyof typeof ROOMS_BY_BASE].map(room => (
+                                      <SelectItem key={room} value={room}>
+                                        {room}
+                                      </SelectItem>
+                                    ))}
+                                  </SelectContent>
+                                </Select>
+                              )}
+                            </>
                           )}
                         </div>
                       </TableCell>
@@ -216,6 +265,12 @@ export default function ScheduleTable({
           </TableBody>
         </Table>
       </div>
+
+      <AddTempCourseDialog
+        open={tempCourseDialog.open}
+        onOpenChange={(open) => setTempCourseDialog(prev => ({ ...prev, open }))}
+        onAddCourse={handleAddTempCourse}
+      />
     </div>
   )
 }

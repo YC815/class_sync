@@ -7,9 +7,11 @@ import ScheduleTable from '@/components/schedule/ScheduleTable'
 import WeekNavigation from '@/components/schedule/WeekNavigation'
 import ScheduleActions from '@/components/schedule/ScheduleActions'
 import CourseManager from '@/components/courses/CourseManager'
+import RoomManager from '@/components/rooms/RoomManager'
 import AuthButton from '@/components/auth/AuthButton'
 import { WeekSchedule, Course, ScheduleEvent } from '@/lib/types'
 import { getWeekStart, initializeEmptySchedule } from '@/lib/schedule-utils'
+import { toast } from 'sonner'
 
 // Mock data for development
 const mockCourses: Course[] = [
@@ -61,7 +63,7 @@ export default function Home() {
       setPreviewChanges(data.changes)
     } catch (error) {
       console.error('Preview failed:', error)
-      alert('預覽失敗，請檢查登入狀態並重試')
+      toast.error('預覽失敗，請檢查登入狀態並重試')
     } finally {
       setIsLoading(false)
     }
@@ -91,29 +93,16 @@ export default function Home() {
       }
 
       const data = await response.json()
-      alert(data.message || '同步成功！')
+      toast.success(data.message || '同步成功！')
       setPreviewChanges(undefined)
     } catch (error) {
       console.error('Sync failed:', error)
-      alert(`同步失敗：${error.message}`)
+      toast.error(`同步失敗：${error.message}`)
     } finally {
       setIsLoading(false)
     }
   }
 
-  const handleCopyWeek = async () => {
-    setIsLoading(true)
-    try {
-      // Mock copy week logic
-      await new Promise(resolve => setTimeout(resolve, 500))
-      alert('已複製到下週')
-    } catch (error) {
-      console.error('Copy week failed:', error)
-      alert('複製失敗')
-    } finally {
-      setIsLoading(false)
-    }
-  }
 
   if (status === 'loading' || !currentWeek) {
     return (
@@ -156,6 +145,7 @@ export default function Home() {
         <TabsList>
           <TabsTrigger value="schedule">週課表</TabsTrigger>
           <TabsTrigger value="courses">課程庫</TabsTrigger>
+          <TabsTrigger value="rooms">教室庫</TabsTrigger>
         </TabsList>
 
         <TabsContent value="schedule" className="space-y-6">
@@ -170,12 +160,12 @@ export default function Home() {
                 schedule={schedule}
                 courses={courses}
                 onScheduleChange={setSchedule}
+                currentWeek={currentWeek}
               />
               
               <ScheduleActions
                 onPreview={handlePreview}
                 onSync={handleSync}
-                onCopyWeek={handleCopyWeek}
                 previewChanges={previewChanges}
                 isLoading={isLoading}
               />
@@ -188,6 +178,10 @@ export default function Home() {
             courses={courses}
             onCoursesChange={setCourses}
           />
+        </TabsContent>
+
+        <TabsContent value="rooms" className="space-y-4">
+          <RoomManager />
         </TabsContent>
       </Tabs>
     </div>
