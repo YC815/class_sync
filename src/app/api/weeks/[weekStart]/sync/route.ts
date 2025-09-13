@@ -82,18 +82,31 @@ export async function POST(
     
     // Delete events that are no longer in the schedule
     for (const eventId of eventsToDelete) {
+      let shouldRemoveFromDb = false
       try {
         await calendarService.deleteEvent(eventId)
-        
-        // Remove from database
+        shouldRemoveFromDb = true
+        console.log('🗑️ [Sync] Deleted calendar event:', eventId)
+      } catch (error: any) {
+        const status = error?.code || error?.status || error?.response?.status
+        if (status === 404 || status === 410) {
+          console.log(
+            `⚠️ [Sync] Event ${eventId} not found (status ${status}), removing from database`
+          )
+          shouldRemoveFromDb = true
+        } else {
+          console.warn(`Failed to delete event ${eventId}:`, error)
+        }
+      }
+
+      if (shouldRemoveFromDb) {
         await prisma.event.deleteMany({
           where: {
             userId,
             calendarEventId: eventId
           }
         })
-      } catch (error) {
-        console.warn(`Failed to delete event ${eventId}:`, error)
+        console.log('🗑️ [Sync] Removed event from database:', eventId)
       }
     }
     
