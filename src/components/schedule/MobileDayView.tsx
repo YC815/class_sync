@@ -11,7 +11,7 @@ import {
   SelectValue,
 } from '@/components/ui/select'
 import { ChevronLeft, ChevronRight, Plus } from 'lucide-react'
-import { WeekSchedule, Course, WEEKDAYS, WEEKDAYS_WITH_WEEKENDS, PERIODS, PERIOD_TIMES } from '@/lib/types'
+import { WeekSchedule, Course, WEEKDAYS_WITH_WEEKENDS, PERIODS, PERIOD_TIMES } from '@/lib/types'
 import AddTempCourseDialog from './AddTempCourseDialog'
 
 interface MobileDayViewProps {
@@ -19,21 +19,13 @@ interface MobileDayViewProps {
   courses: Course[]
   onScheduleChange: (newSchedule: WeekSchedule) => void
   currentWeek: Date
-  showSaturday: boolean
-  showSunday: boolean
-  onToggleSaturday: (show: boolean) => void
-  onToggleSunday: (show: boolean) => void
 }
 
 export default function MobileDayView({
   schedule,
   courses,
   onScheduleChange,
-  currentWeek,
-  showSaturday,
-  showSunday,
-  onToggleSaturday,
-  onToggleSunday
+  currentWeek
 }: MobileDayViewProps) {
   const [selectedDay, setSelectedDay] = useState<number>(0) // 0 = 週一
   const [tempCourseDialog, setTempCourseDialog] = useState({
@@ -42,13 +34,8 @@ export default function MobileDayView({
     period: 1
   })
 
-  // Build weekdays array based on what should be shown
-  const currentWeekdays = React.useMemo(() => {
-    const baseWeekdays = [...WEEKDAYS]
-    if (showSaturday) baseWeekdays.push('週六')
-    if (showSunday) baseWeekdays.push('週日')
-    return baseWeekdays
-  }, [showSaturday, showSunday])
+  // Always show all weekdays including weekends
+  const currentWeekdays = WEEKDAYS_WITH_WEEKENDS
   
   const maxDayIndex = currentWeekdays.length - 1
 
@@ -103,7 +90,9 @@ export default function MobileDayView({
             <ChevronLeft className="w-4 h-4" />
           </Button>
           
-          <div className="px-4 py-1 text-center min-w-32">
+          <div className={`px-4 py-1 text-center min-w-32 ${
+            selectedDay >= 5 ? 'bg-slate-100 rounded-lg' : ''
+          }`}>
             <div className="text-sm font-semibold">
               {currentWeekdays[selectedDay]}
             </div>
@@ -132,46 +121,14 @@ export default function MobileDayView({
           <SelectValue />
         </SelectTrigger>
         <SelectContent>
-          {currentWeekdays.map((day, index) => (
-            <SelectItem key={index} value={index.toString()}>
-              {day} {formatDate(getDateForDay(index))}
-            </SelectItem>
-          ))}
-          {(!showSaturday || !showSunday) && (
-            <>
-              <SelectItem value="-1" disabled className="text-center py-2">
-                ━━━━━━━━━━━━━━━━━━
+          {currentWeekdays.map((day, index) => {
+            const isWeekend = index >= 5
+            return (
+              <SelectItem key={index} value={index.toString()} className={isWeekend ? 'bg-slate-50' : ''}>
+                {day} {formatDate(getDateForDay(index))}
               </SelectItem>
-              {!showSaturday && (
-                <SelectItem 
-                  value="saturday-toggle"
-                  onSelect={() => {
-                    onToggleSaturday(true)
-                  }}
-                  className="text-center font-medium text-blue-600"
-                >
-                  <div className="flex items-center justify-center gap-1">
-                    <Plus className="w-3 h-3" />
-                    顯示週六
-                  </div>
-                </SelectItem>
-              )}
-              {!showSunday && (
-                <SelectItem 
-                  value="sunday-toggle"
-                  onSelect={() => {
-                    onToggleSunday(true)
-                  }}
-                  className="text-center font-medium text-blue-600"
-                >
-                  <div className="flex items-center justify-center gap-1">
-                    <Plus className="w-3 h-3" />
-                    顯示週日
-                  </div>
-                </SelectItem>
-              )}
-            </>
-          )}
+            )
+          })}
         </SelectContent>
       </Select>
 
@@ -239,7 +196,7 @@ export default function MobileDayView({
         </CardHeader>
         <CardContent>
           <div className="space-y-2">
-            {WEEKDAYS.map((day, dayIndex) => {
+            {currentWeekdays.map((day, dayIndex) => {
               const daySchedule = schedule[dayIndex] || {}
               const hasClasses = Object.keys(daySchedule).length > 0
               
@@ -298,7 +255,9 @@ export default function MobileDayView({
               return (
                 <div key={dayIndex} className="space-y-1">
                   <div className="flex items-center justify-between py-1">
-                    <span className="text-sm font-medium w-12">{day}</span>
+                    <span className={`text-sm font-medium w-12 ${
+                      dayIndex >= 5 ? 'text-slate-600' : ''
+                    }`}>{day}</span>
                     <div className="flex-1 text-right">
                       {hasClasses ? (
                         <div className="text-xs text-muted-foreground">

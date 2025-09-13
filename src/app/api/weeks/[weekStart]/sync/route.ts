@@ -221,13 +221,32 @@ export async function POST(
           console.log('✅ [Sync] New event created with ID:', calendarEventId)
         }
 
+        // Parse location information for database storage
+        const locationStr = event.location || ''
+        let baseName = ''
+        let roomName = ''
+
+        // Parse location string to extract base and room names
+        // Expected format: "baseName - roomName" or "baseName" or "roomName"
+        if (locationStr.includes(' - ')) {
+          const parts = locationStr.split(' - ')
+          baseName = parts[0].trim()
+          roomName = parts[1].trim()
+        } else if (locationStr) {
+          // If no separator, treat as baseName by default
+          baseName = locationStr.trim()
+        }
+
         // Save/update event in database
         console.log('💾 [Sync] Saving event to database:', {
           existingEventId: existingEvent?.id,
           calendarEventId,
-          isUpdate: !!existingEvent
+          isUpdate: !!existingEvent,
+          location: locationStr,
+          baseName,
+          roomName
         })
-        
+
         const savedEvent = await prisma.event.upsert({
           where: {
             id: existingEvent?.id || 'new-id'
@@ -240,11 +259,15 @@ export async function POST(
             periodEnd: event.periodEnd,
             courseId: event.courseId,
             courseName: event.courseName,
+            baseName: baseName || null,
+            roomName: roomName || null,
             calendarEventId,
             seriesId: event.seriesId || null
           },
           update: {
             courseName: event.courseName,
+            baseName: baseName || null,
+            roomName: roomName || null,
             calendarEventId,
             seriesId: event.seriesId || null
           }

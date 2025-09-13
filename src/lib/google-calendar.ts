@@ -60,18 +60,30 @@ export class GoogleCalendarService {
     })
 
     console.log('🔍 [GoogleCalendar] Found events:', response.data.items?.length || 0)
-    
+
+    // Log all events first
+    console.log('🔍 [GoogleCalendar] All events found:', (response.data.items || []).map(event => ({
+      id: event.id,
+      summary: event.summary,
+      start: event.start?.dateTime,
+      hasExtendedProps: !!event.extendedProperties?.private,
+      source: event.extendedProperties?.private?.source,
+      hasDescription: !!event.description,
+      descriptionSnippet: event.description?.substring(0, 100)
+    })))
+
     // Filter for events created by our app (using extendedProperties.private.source)
-    const ourEvents = (response.data.items || []).filter(event => 
+    const ourEvents = (response.data.items || []).filter(event =>
       event.extendedProperties?.private?.source === 'class_sync'
     )
-    
+
     console.log('🔍 [GoogleCalendar] Our events (filtered):', ourEvents.length)
     console.log('🔍 [GoogleCalendar] Our events details:', ourEvents.map(e => ({
       id: e.id,
       summary: e.summary,
       start: e.start,
-      extendedProperties: e.extendedProperties
+      extendedProperties: e.extendedProperties,
+      description: e.description?.substring(0, 200) + (e.description && e.description.length > 200 ? '...' : '')
     })))
 
     return ourEvents as CalendarEvent[]
@@ -207,6 +219,22 @@ export class GoogleCalendarService {
       // 向後相容：如果沒有多連結但有單一 URL
       description += `\n\n課程連結：${scheduleEvent.url}`
     }
+
+    // 在描述末尾加入 JSON 元數據供程式讀取
+    const metadata = {
+      source: 'class_sync',
+      weekStart: formatDateLocal(weekStart),
+      weekday: scheduleEvent.weekday,
+      periodStart: scheduleEvent.periodStart,
+      periodEnd: scheduleEvent.periodEnd,
+      courseId: scheduleEvent.courseId || null,
+      seriesId: scheduleEvent.seriesId || null,
+      courseName: scheduleEvent.courseName,
+      location: scheduleEvent.location || null,
+      timestamp: new Date().toISOString()
+    }
+
+    description += `\n\n---\nClassSync 資料：\n${JSON.stringify(metadata, null, 2)}`
 
     const calendarEvent = {
       summary: scheduleEvent.courseName,

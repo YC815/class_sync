@@ -49,7 +49,7 @@ export async function POST(
       // 更新現有資料
       await prisma.week.update({
         where: { id: currentWeek.id },
-        data: { data: previousWeek.data }
+        data: { data: previousWeek.data as any }
       })
     } else {
       // 創建新資料
@@ -57,7 +57,7 @@ export async function POST(
         data: {
           userId: session.user.id,
           weekStart: currentWeekStart,
-          data: previousWeek.data
+          data: previousWeek.data as any
         }
       })
     }

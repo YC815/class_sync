@@ -16,8 +16,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select'
-import { Link, Plus } from 'lucide-react'
-import { Button } from '@/components/ui/button'
+import { Link } from 'lucide-react'
 import AddTempCourseDialog from './AddTempCourseDialog'
 import { 
   WeekSchedule, 
@@ -39,22 +38,14 @@ interface ScheduleTableProps {
   bases: Base[]
   onScheduleChange: (schedule: WeekSchedule) => void
   currentWeek: Date
-  showSaturday: boolean
-  showSunday: boolean
-  onToggleSaturday: (show: boolean) => void
-  onToggleSunday: (show: boolean) => void
 }
 
-export default function ScheduleTable({ 
-  schedule, 
-  courses, 
+export default function ScheduleTable({
+  schedule,
+  courses,
   bases,
   onScheduleChange,
-  currentWeek,
-  showSaturday,
-  showSunday,
-  onToggleSaturday,
-  onToggleSunday
+  currentWeek
 }: ScheduleTableProps) {
   const [tempCourseDialog, setTempCourseDialog] = useState<{open: boolean, day: number, period: number}>({
     open: false,
@@ -62,13 +53,9 @@ export default function ScheduleTable({
     period: 0
   })
 
-  // Calculate dates for each weekday (including weekends if shown)
+  // Calculate dates for each weekday (including weekends)
   const getWeekdayDates = () => {
-    const baseWeekdays = [...WEEKDAYS]
-    if (showSaturday) baseWeekdays.push('週六')
-    if (showSunday) baseWeekdays.push('週日')
-    
-    return baseWeekdays.map((_, index) => {
+    return WEEKDAYS_WITH_WEEKENDS.map((_, index) => {
       const date = new Date(currentWeek)
       date.setDate(currentWeek.getDate() + index)
       return date.toLocaleDateString('zh-TW', { month: 'numeric', day: 'numeric' })
@@ -76,26 +63,21 @@ export default function ScheduleTable({
   }
 
   const weekdayDates = getWeekdayDates()
-  // Build weekdays array based on what should be shown
-  const currentWeekdays = React.useMemo(() => {
-    const baseWeekdays = [...WEEKDAYS]
-    if (showSaturday) baseWeekdays.push('週六')
-    if (showSunday) baseWeekdays.push('週日')
-    return baseWeekdays
-  }, [showSaturday, showSunday])
+  // Always show all weekdays including weekends
+  const currentWeekdays = WEEKDAYS_WITH_WEEKENDS
   
-  // Initialize weekend days in schedule if showing weekends
+  // Initialize weekend days in schedule
   React.useEffect(() => {
-    const needsUpdate = (showSaturday && !schedule[6]) || (showSunday && !schedule[7])
+    const needsUpdate = !schedule[6] || !schedule[7]
     if (needsUpdate) {
       const newSchedule = { ...schedule }
-      if (showSaturday && !newSchedule[6]) {
+      if (!newSchedule[6]) {
         newSchedule[6] = {}
         for (let period = 1; period <= 8; period++) {
           newSchedule[6][period] = null
         }
       }
-      if (showSunday && !newSchedule[7]) {
+      if (!newSchedule[7]) {
         newSchedule[7] = {}
         for (let period = 1; period <= 8; period++) {
           newSchedule[7][period] = null
@@ -103,7 +85,7 @@ export default function ScheduleTable({
       }
       onScheduleChange(newSchedule)
     }
-  }, [showSaturday, showSunday, schedule, onScheduleChange])
+  }, [schedule, onScheduleChange])
   const updateCell = (day: number, period: number, data: ScheduleCell | null) => {
     const newSchedule = { ...schedule }
     newSchedule[day] = { ...newSchedule[day], [period]: data }
@@ -250,11 +232,12 @@ export default function ScheduleTable({
               <TableHead className="w-20 text-center text-xs align-middle">時間</TableHead>
               {currentWeekdays.map((day, index) => {
                 const dayIndex = index + 1
-                const morningConflict = checkHalfDayBaseConflict(dayIndex, 'morning')
-                const afternoonConflict = checkHalfDayBaseConflict(dayIndex, 'afternoon')
-                
+                const isWeekend = index >= 5 // 週六日
+
                 return (
-                  <TableHead key={index} className="text-center min-w-32 px-2 align-middle">
+                  <TableHead key={index} className={`text-center min-w-32 px-2 align-middle ${
+                    isWeekend ? 'bg-slate-50/50' : ''
+                  }`}>
                     <div className="flex flex-col items-center">
                       <span>{day}</span>
                       <span className="text-xs text-muted-foreground font-normal">
@@ -264,33 +247,6 @@ export default function ScheduleTable({
                   </TableHead>
                 )
               })}
-              {/* Weekend toggle buttons */}
-              {!showSaturday && (
-                <TableHead className="text-center min-w-20 px-1 align-middle">
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => onToggleSaturday(true)}
-                    className="h-8 px-2 text-xs"
-                  >
-                    <Plus className="w-3 h-3 mr-1" />
-                    週六
-                  </Button>
-                </TableHead>
-              )}
-              {!showSunday && (
-                <TableHead className="text-center min-w-20 px-1 align-middle">
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => onToggleSunday(true)}
-                    className="h-8 px-2 text-xs"
-                  >
-                    <Plus className="w-3 h-3 mr-1" />
-                    週日
-                  </Button>
-                </TableHead>
-              )}
             </TableRow>
           </TableHeader>
           <TableBody>
@@ -306,14 +262,17 @@ export default function ScheduleTable({
                 const day = dayIndex + 1
                 const morningBase = getHalfDayBaseDisplay(day, 'morning')
                 const morningConflict = checkHalfDayBaseConflict(day, 'morning')
-                
+                const isWeekend = dayIndex >= 5
+
                 return (
-                  <TableCell key={`morning-base-${dayIndex}`} className="text-center text-xs font-medium">
+                  <TableCell key={`morning-base-${dayIndex}`} className={`text-center text-xs font-medium ${
+                    isWeekend ? 'bg-slate-50/50' : ''
+                  }`}>
                     <div className={`px-2 py-1 rounded ${
-                      morningConflict 
-                        ? 'border border-red-500 text-red-700 bg-red-50' 
-                        : morningBase 
-                          ? 'bg-blue-50 text-blue-700' 
+                      morningConflict
+                        ? 'border border-red-500 text-red-700 bg-red-50'
+                        : morningBase
+                          ? 'bg-blue-50 text-blue-700'
                           : 'text-gray-400'
                     }`}>
                       {morningBase || '無'}
@@ -321,9 +280,6 @@ export default function ScheduleTable({
                   </TableCell>
                 )
               })}
-              {/* Empty cells for weekend buttons when not showing weekends */}
-              {!showSaturday && <TableCell></TableCell>}
-              {!showSunday && <TableCell></TableCell>}
             </TableRow>
             {PERIODS.map(period => (
               <React.Fragment key={period}>
@@ -337,9 +293,12 @@ export default function ScheduleTable({
                   {currentWeekdays.map((_, dayIndex) => {
                     const day = dayIndex + 1
                     const cell = schedule[day]?.[period]
-                    
+                    const isWeekend = dayIndex >= 5
+
                     return (
-                      <TableCell key={`${day}-${period}`} className="p-1 sm:p-2 h-20 align-top">
+                      <TableCell key={`${day}-${period}`} className={`p-1 sm:p-2 h-20 align-top ${
+                        isWeekend ? 'bg-slate-50/20' : ''
+                      }`}>
                         <div className="space-y-1 h-full flex flex-col justify-start">
                           <Select
                             value={cell?.isContinuation ? 'continuation' : (cell?.courseId || (cell?.isTemporary ? 'temp' : 'none'))}
@@ -446,28 +405,27 @@ export default function ScheduleTable({
                       </TableCell>
                     )
                   })}
-                  {/* Empty cells for weekend buttons when not showing weekends */}
-                  {!showSaturday && <TableCell></TableCell>}
-                  {!showSunday && <TableCell></TableCell>}
                 </TableRow>
                 {period === 4 && (
                   <>
-                    <TableRow className="bg-yellow-50/50">
+                    {/* <TableRow className="bg-yellow-50/50">
                       <TableCell className="font-medium text-center text-yellow-700">
-                        中
+                        中午
                       </TableCell>
                       <TableCell className="text-xs text-yellow-600">
                         11:55-13:25
                       </TableCell>
-                      {currentWeekdays.map((_, dayIndex) => (
-                        <TableCell key={`lunch-${dayIndex}`} className="text-center text-yellow-600 text-xs font-medium">
-                          午間休息
-                        </TableCell>
-                      ))}
-                      {/* Empty cells for weekend buttons when not showing weekends */}
-                      {!showSaturday && <TableCell></TableCell>}
-                      {!showSunday && <TableCell></TableCell>}
-                    </TableRow>
+                      {currentWeekdays.map((_, dayIndex) => {
+                        const isWeekend = dayIndex >= 5
+                        return (
+                          <TableCell key={`lunch-${dayIndex}`} className={`text-center text-yellow-600 text-xs font-medium ${
+                            isWeekend ? 'bg-slate-50/50' : ''
+                          }`}>
+                            午間休息
+                          </TableCell>
+                        )
+                      })}
+                    </TableRow> */}
                     <TableRow className="bg-blue-50/50">
                       <TableCell className="font-medium text-center text-blue-700">
                         下午
@@ -479,14 +437,17 @@ export default function ScheduleTable({
                         const day = dayIndex + 1
                         const afternoonBase = getHalfDayBaseDisplay(day, 'afternoon')
                         const afternoonConflict = checkHalfDayBaseConflict(day, 'afternoon')
-                        
+                        const isWeekend = dayIndex >= 5
+
                         return (
-                          <TableCell key={`afternoon-base-${dayIndex}`} className="text-center text-xs font-medium">
+                          <TableCell key={`afternoon-base-${dayIndex}`} className={`text-center text-xs font-medium ${
+                            isWeekend ? 'bg-slate-50/50' : ''
+                          }`}>
                             <div className={`px-2 py-1 rounded ${
-                              afternoonConflict 
-                                ? 'border border-red-500 text-red-700 bg-red-50' 
-                                : afternoonBase 
-                                  ? 'bg-blue-50 text-blue-700' 
+                              afternoonConflict
+                                ? 'border border-red-500 text-red-700 bg-red-50'
+                                : afternoonBase
+                                  ? 'bg-blue-50 text-blue-700'
                                   : 'text-gray-400'
                             }`}>
                               {afternoonBase || '無'}
@@ -494,9 +455,6 @@ export default function ScheduleTable({
                           </TableCell>
                         )
                       })}
-                      {/* Empty cells for weekend buttons when not showing weekends */}
-                      {!showSaturday && <TableCell></TableCell>}
-                      {!showSunday && <TableCell></TableCell>}
                     </TableRow>
                   </>
                 )}

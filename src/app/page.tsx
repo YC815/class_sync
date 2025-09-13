@@ -26,7 +26,7 @@ import RoomManager from '@/components/rooms/RoomManager'
 import RoomManagerSkeleton from '@/components/rooms/RoomManagerSkeleton'
 import AuthButton from '@/components/auth/AuthButton'
 import { WeekSchedule, Course, Base, ScheduleEvent } from '@/lib/types'
-import { getWeekStart, initializeEmptySchedule, hasSaturdayCourses, hasSundayCourses } from '@/lib/schedule-utils'
+import { getWeekStart, initializeEmptySchedule } from '@/lib/schedule-utils'
 import { useNavbarHeight } from '@/lib/hooks'
 import { toast } from 'sonner'
 
@@ -38,7 +38,7 @@ function formatDateLocal(date: Date): string {
 
 export default function Home() {
   const { data: session, status } = useSession()
-  const navbarRef = useRef<HTMLElement>(null)
+  const navbarRef = useRef<HTMLElement>(null!)
   useNavbarHeight(navbarRef)
   const [currentWeek, setCurrentWeek] = useState<Date | null>(null)
   const [schedule, setSchedule] = useState<WeekSchedule>(initializeEmptySchedule())
@@ -54,9 +54,10 @@ export default function Home() {
   const [isLoadingCourses, setIsLoadingCourses] = useState(false)
   const [isLoadingBases, setIsLoadingBases] = useState(false)
   const [activeTab, setActiveTab] = useState('schedule')
-  const [showSaturday, setShowSaturday] = useState(false)
-  const [showSunday, setShowSunday] = useState(false)
+  // 週六日一直顯示，不需要狀態管理
   const [isResetting, setIsResetting] = useState(false)
+  const [syncError, setSyncError] = useState<string | null>(null)
+  const [showSyncErrorToast, setShowSyncErrorToast] = useState(false)
 
   // Initialize currentWeek on client side to avoid hydration mismatch
   useEffect(() => {
@@ -103,84 +104,106 @@ export default function Home() {
     }
   }
 
-  const loadWeekSchedule = useCallback(async (week: Date) => {
+  const loadWeekSchedule = useCallback(async (week: Date, skipSyncDeleted = false) => {
     setIsLoadingSchedule(true)
+    setSyncError(null)
+
     try {
       const weekStartStr = formatDateLocal(week)
-      const response = await fetch(`/api/weeks/${weekStartStr}`)
-      
-      if (response.ok) {
-        const data = await response.json()
+
+      // 並行執行載入課表和同步刪除的事件（如果需要的話）
+      const promises = [fetch(`/api/weeks/${weekStartStr}`)]
+
+      if (!skipSyncDeleted) {
+        promises.push(
+          fetch(`/api/weeks/${weekStartStr}/sync-deleted`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' }
+          }).catch(() => new Response('{}', { status: 500 })) // 不讓同步刪除失敗影響載入
+        )
+      }
+
+      const [scheduleResponse, syncDeletedResponse] = await Promise.all(promises)
+
+      // 處理課表載入
+      if (scheduleResponse.ok) {
+        const data = await scheduleResponse.json()
         if (data.schedule) {
           setSchedule(data.schedule)
-          // Auto-show Saturday/Sunday if there are courses in the loaded schedule
-          const hasSaturday = hasSaturdayCourses(data.schedule)
-          const hasSunday = hasSundayCourses(data.schedule)
-          setShowSaturday(hasSaturday)
-          setShowSunday(hasSunday)
-          console.log(`載入 ${weekStartStr} 週課表:`, data.totalEvents || Object.keys(data.schedule).length, '個時段', hasSaturday && hasSunday ? '(包含週六日)' : hasSaturday ? '(包含週六)' : hasSunday ? '(包含週日)' : '')
+          console.log(`載入 ${weekStartStr} 週課表:`, data.totalEvents || Object.keys(data.schedule).length, '個時段')
+
+          // 顯示恢復結果通知
+          if (data.recoveryInfo?.recoveredEvents > 0) {
+            toast.success(`已從 Google Calendar 自動恢復 ${data.recoveryInfo.recoveredEvents} 個事件`)
+          }
         } else {
-          // 沒有資料時重置為空課表
           setSchedule(initializeEmptySchedule())
-          setShowSaturday(false)
-          setShowSunday(false)
         }
-      } else if (response.status === 404) {
-        // 404 表示該週沒有課表資料，重置為空課表
+      } else if (scheduleResponse.status === 404) {
         setSchedule(initializeEmptySchedule())
-        setShowSaturday(false)
-        setShowSunday(false)
       } else {
-        console.warn('載入週課表失敗:', response.status)
-        toast.error('載入週課表失敗')
+        console.warn('載入週課表失敗:', scheduleResponse.status)
+        setSyncError('載入週課表失敗')
       }
+
+      // 處理同步刪除的結果（背景處理，不影響主要流程）
+      if (syncDeletedResponse && syncDeletedResponse.ok) {
+        const syncData = await syncDeletedResponse.json()
+        if (syncData.deletedFromDb > 0) {
+          console.log(`✅ [SyncDeleted] 已清理 ${syncData.deletedFromDb} 個在 Google Calendar 中已刪除的事件`)
+        }
+      } else if (syncDeletedResponse && syncDeletedResponse.status === 401) {
+        const errorData = await syncDeletedResponse.json().catch(() => ({}))
+        if (errorData.code === 'TOKEN_EXPIRED') {
+          signOut()
+        }
+      }
+
     } catch (error) {
       console.error('載入週課表錯誤:', error)
-      toast.error('載入週課表失敗')
-      // 發生錯誤時也重置為空課表
+      setSyncError('載入週課表失敗')
       setSchedule(initializeEmptySchedule())
-      setShowSaturday(false)
-      setShowSunday(false)
     } finally {
       setIsLoadingSchedule(false)
     }
   }, [])
 
-  const syncDeletedEvents = useCallback(async (week: Date) => {
+  // Manual recovery function for Google Calendar events
+  const manualRecovery = useCallback(async (week: Date) => {
+    setIsLoading(true)
     try {
       const weekStartStr = formatDateLocal(week)
-      console.log('🔄 [SyncDeleted] Starting sync for deleted events for week:', weekStartStr)
-      
-      const response = await fetch(`/api/weeks/${weekStartStr}/sync-deleted`, {
+      const response = await fetch(`/api/weeks/${weekStartStr}/recover`, {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
+        headers: { 'Content-Type': 'application/json' }
       })
 
       if (response.ok) {
         const data = await response.json()
-        console.log('✅ [SyncDeleted] Sync successful:', data)
-        
-        if (data.deletedFromDb > 0) {
-          toast.success(`已清理 ${data.deletedFromDb} 個在 Google Calendar 中已刪除的事件`)
-          // Reload the schedule after cleaning up deleted events
-          loadWeekSchedule(week)
+        if (data.recoveredEvents > 0 || data.linkedEvents > 0) {
+          toast.success(data.message)
+          // Reload the schedule to show recovered events
+          await loadWeekSchedule(week, true) // Skip sync-deleted to avoid conflicts
+        } else {
+          toast.info(data.message)
         }
       } else if (response.status === 401) {
         const errorData = await response.json().catch(() => ({}))
-        console.warn('⚠️ [SyncDeleted] Unauthorized - may need to re-authenticate')
-        
         if (errorData.code === 'TOKEN_EXPIRED') {
+          toast.error('Google Calendar 權限已過期，請重新登入')
           signOut()
+        } else {
+          toast.error('權限不足，請重新登入')
         }
       } else {
-        console.warn('⚠️ [SyncDeleted] Sync response not ok:', response.status)
-        // Don't show error toast for sync deleted events as it's background operation
+        const errorData = await response.json().catch(() => ({}))
+        toast.error(errorData.error || '恢復失敗，請重試')
       }
     } catch (error) {
-      console.error('❌ [SyncDeleted] Sync failed:', error)
-      // Don't show error toast for sync deleted events as it's background operation
+      console.error('Manual recovery failed:', error)
+      toast.error('恢復失敗，請檢查網路連線')
+    } finally {
+      setIsLoading(false)
     }
   }, [loadWeekSchedule])
 
@@ -188,10 +211,61 @@ export default function Home() {
   useEffect(() => {
     if (currentWeek && session?.user?.id) {
       loadWeekSchedule(currentWeek)
-      // Also sync deleted events from Google Calendar
-      syncDeletedEvents(currentWeek)
     }
-  }, [currentWeek, session, loadWeekSchedule, syncDeletedEvents])
+  }, [currentWeek, session, loadWeekSchedule])
+
+  // 顯示同步錯誤的持久性 toast
+  useEffect(() => {
+    if (syncError && !showSyncErrorToast) {
+      setShowSyncErrorToast(true)
+      toast.error(
+        <div className="flex flex-col gap-2">
+          <div>偵測到沒有同步，可能有事件未顯示</div>
+          <div className="flex gap-2">
+            <button
+              onClick={() => {
+                if (!currentWeek) return
+                setIsLoading(true)
+                loadWeekSchedule(currentWeek, false)
+                  .then(() => {
+                    toast.success('重新同步完成')
+                    setShowSyncErrorToast(false)
+                  })
+                  .catch((error) => {
+                    console.error('手動同步失敗:', error)
+                    toast.error('同步失敗，請重試')
+                  })
+                  .finally(() => {
+                    setIsLoading(false)
+                  })
+              }}
+              className="px-3 py-1 bg-white text-red-600 rounded border hover:bg-gray-50"
+              disabled={isLoading}
+            >
+              {isLoading ? '同步中...' : '重新同步'}
+            </button>
+            <button
+              onClick={() => {
+                if (!currentWeek) return
+                manualRecovery(currentWeek).then(() => {
+                  setShowSyncErrorToast(false)
+                  setSyncError(null)
+                })
+              }}
+              className="px-3 py-1 bg-blue-600 text-white rounded hover:bg-blue-700"
+              disabled={isLoading}
+            >
+              恢復事件
+            </button>
+          </div>
+        </div>,
+        {
+          duration: Infinity, // 不自動消失
+          id: 'sync-error-toast'
+        }
+      )
+    }
+  }, [syncError, showSyncErrorToast, isLoading, currentWeek, loadWeekSchedule, manualRecovery])
 
   const handlePreview = async () => {
     if (!currentWeek) {
@@ -206,7 +280,8 @@ export default function Home() {
     setIsLoading(true)
     try {
       const requestBody = {
-        scheduleData: schedule
+        scheduleData: schedule,
+        currentLocation: '' // TODO: Add default location management if needed
       }
       console.log('🔍 [Preview] Sending request with body:', requestBody)
       
@@ -381,8 +456,6 @@ export default function Home() {
       
       // Reset local state
       setSchedule(initializeEmptySchedule())
-      setShowSaturday(false)
-      setShowSunday(false)
       setPreviewChanges(undefined)
       
       // Reload data
@@ -553,11 +626,6 @@ export default function Home() {
                       onScheduleChange={(newSchedule) => {
                         setSchedule(newSchedule)
                         setPreviewChanges(undefined)
-                        // Auto-detect weekends when schedule changes
-                        const hasSaturday = hasSaturdayCourses(newSchedule)
-                        const hasSunday = hasSundayCourses(newSchedule)
-                        setShowSaturday(hasSaturday)
-                        setShowSunday(hasSunday)
                         // 自動保存課表變更 (debounced)
                         if (currentWeek) {
                           const weekStartStr = formatDateLocal(currentWeek)
@@ -565,10 +633,6 @@ export default function Home() {
                         }
                       }}
                       currentWeek={currentWeek}
-                      showSaturday={showSaturday}
-                      showSunday={showSunday}
-                      onToggleSaturday={setShowSaturday}
-                      onToggleSunday={setShowSunday}
                     />
                   </div>
                   
@@ -579,11 +643,6 @@ export default function Home() {
                     onScheduleChange={(newSchedule) => {
                       setSchedule(newSchedule)
                       setPreviewChanges(undefined)
-                      // Auto-detect weekends when schedule changes
-                      const hasSaturday = hasSaturdayCourses(newSchedule)
-                      const hasSunday = hasSundayCourses(newSchedule)
-                      setShowSaturday(hasSaturday)
-                      setShowSunday(hasSunday)
                       // 自動保存課表變更 (debounced)
                       if (currentWeek) {
                         const weekStartStr = formatDateLocal(currentWeek)
@@ -591,10 +650,6 @@ export default function Home() {
                       }
                     }}
                     currentWeek={currentWeek}
-                    showSaturday={showSaturday}
-                    showSunday={showSunday}
-                    onToggleSaturday={setShowSaturday}
-                    onToggleSunday={setShowSunday}
                   />
                 </>
               )}
@@ -602,6 +657,7 @@ export default function Home() {
               <FloatingSyncButton
                 onPreview={handlePreview}
                 onSync={handleSync}
+                onRecover={currentWeek ? () => manualRecovery(currentWeek) : undefined}
                 previewChanges={previewChanges}
                 isLoading={isLoading}
               />

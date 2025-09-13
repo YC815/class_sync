@@ -3,12 +3,13 @@
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
-import { Calendar, Plus, Minus, Loader2, ExternalLink } from 'lucide-react'
+import { Calendar, Plus, Minus, Loader2, ExternalLink, RefreshCw } from 'lucide-react'
 import { ScheduleEvent } from '@/lib/types'
 
 interface ScheduleActionsProps {
   onPreview: () => void
   onSync: () => void
+  onRecover?: () => void
   previewChanges?: {
     create: ScheduleEvent[]
     update: ScheduleEvent[]
@@ -20,6 +21,7 @@ interface ScheduleActionsProps {
 export default function ScheduleActions({
   onPreview,
   onSync,
+  onRecover,
   previewChanges,
   isLoading = false
 }: ScheduleActionsProps) {
@@ -39,16 +41,28 @@ export default function ScheduleActions({
           <ExternalLink className="w-4 h-4" />
           開啟 Google 課表
         </Button>
-        <Button 
-          variant="outline" 
+        <Button
+          variant="outline"
           onClick={onPreview}
           disabled={isLoading}
           className="w-full sm:w-auto"
         >
           預覽同步
         </Button>
-        
-        <Button 
+
+        {onRecover && (
+          <Button
+            variant="outline"
+            onClick={onRecover}
+            disabled={isLoading}
+            className="gap-2 w-full sm:w-auto"
+          >
+            <RefreshCw className="w-4 h-4" />
+            恢復事件
+          </Button>
+        )}
+
+        <Button
           onClick={onSync}
           disabled={isLoading || totalChanges === 0}
           className="gap-2 w-full sm:w-auto"

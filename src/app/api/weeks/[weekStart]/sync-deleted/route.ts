@@ -5,6 +5,64 @@ import { GoogleCalendarService } from '@/lib/google-calendar'
 import { authOptions } from '@/lib/auth'
 import { WeekSchedule } from '@/lib/types'
 
+// Enhanced matching algorithm for linking database events with calendar events
+function findMatchingCalendarEvent(dbEvent: any, calendarEvents: any[], weekStart: Date) {
+  const candidateEvents = calendarEvents.filter(calEvent => {
+    // First check: Must have our app's metadata
+    const hasAppMetadata = calEvent.extendedProperties?.private?.source === 'class_sync'
+    if (!hasAppMetadata) return false
+
+    // Second check: Match by metadata if available (most reliable)
+    const metadata = calEvent.extendedProperties.private
+    if (metadata.weekday && metadata.periodStart && metadata.periodEnd) {
+      const metadataMatch = (
+        parseInt(metadata.weekday) === dbEvent.weekday &&
+        parseInt(metadata.periodStart) === dbEvent.periodStart &&
+        parseInt(metadata.periodEnd) === dbEvent.periodEnd &&
+        metadata.weekStart === weekStart.toLocaleDateString('en-CA', { timeZone: 'Asia/Taipei' })
+      )
+      if (metadataMatch) return true
+    }
+
+    // Third check: Match by time and name (fallback)
+    const calEventStart = calEvent.start?.dateTime ? new Date(calEvent.start.dateTime) : null
+    const calEventEnd = calEvent.end?.dateTime ? new Date(calEvent.end.dateTime) : null
+
+    if (!calEventStart || !calEventEnd) return false
+
+    // Calculate expected start time
+    const expectedStart = new Date(weekStart)
+    expectedStart.setDate(expectedStart.getDate() + (dbEvent.weekday - 1))
+
+    const startTime = dbEvent.periodStart === 1 ? 825 :
+                     dbEvent.periodStart === 2 ? 920 :
+                     dbEvent.periodStart === 3 ? 1015 :
+                     dbEvent.periodStart === 4 ? 1110 :
+                     dbEvent.periodStart === 5 ? 1315 :
+                     dbEvent.periodStart === 6 ? 1410 :
+                     dbEvent.periodStart === 7 ? 1505 :
+                     dbEvent.periodStart === 8 ? 1600 : 825
+
+    expectedStart.setHours(Math.floor(startTime / 100), startTime % 100, 0, 0)
+
+    // Check time match (within 30 minutes tolerance) and name match
+    const timeDiff = Math.abs(calEventStart.getTime() - expectedStart.getTime())
+    const summaryMatch = calEvent.summary === dbEvent.courseName
+
+    return timeDiff <= 1800000 && summaryMatch // 30 minutes tolerance
+  })
+
+  // Return the best match (prioritize metadata matches)
+  const metadataMatch = candidateEvents.find(calEvent => {
+    const metadata = calEvent.extendedProperties?.private
+    return metadata?.weekday &&
+           parseInt(metadata.weekday) === dbEvent.weekday &&
+           parseInt(metadata.periodStart) === dbEvent.periodStart
+  })
+
+  return metadataMatch || candidateEvents[0] || null
+}
+
 export async function POST(
   request: NextRequest,
   { params }: { params: Promise<{ weekStart: string }> }
@@ -88,43 +146,10 @@ export async function POST(
     
     // For events without calendarEventId, check if similar events exist in Google Calendar
     for (const dbEvent of eventsWithoutCalendarId) {
-      const similarCalendarEvents = calendarEvents.filter(calEvent => {
-        const calEventStart = calEvent.start?.dateTime ? new Date(calEvent.start.dateTime) : null
-        const calEventEnd = calEvent.end?.dateTime ? new Date(calEvent.end.dateTime) : null
-        
-        if (!calEventStart || !calEventEnd) return false
-        
-        // Check if the calendar event matches this database event based on time and name
-        const expectedStart = new Date(weekStart)
-        // Fix: weekday is 1-based (Monday=1, Tuesday=2, etc.)
-        // weekStart is guaranteed to be Monday, so we add (weekday - 1) days
-        const daysToAdd = dbEvent.weekday - 1
-        expectedStart.setDate(expectedStart.getDate() + daysToAdd)
-        
-        const startTime = dbEvent.periodStart === 1 ? 825 : 
-                         dbEvent.periodStart === 2 ? 920 :
-                         dbEvent.periodStart === 3 ? 1015 :
-                         dbEvent.periodStart === 4 ? 1110 :
-                         dbEvent.periodStart === 5 ? 1315 :
-                         dbEvent.periodStart === 6 ? 1410 :
-                         dbEvent.periodStart === 7 ? 1505 :
-                         dbEvent.periodStart === 8 ? 1600 : 825
-        
-        expectedStart.setHours(Math.floor(startTime / 100), startTime % 100, 0, 0)
-        
-        // Check if calendar event time matches expected time (within 1 hour tolerance)
-        const timeDiff = Math.abs(calEventStart.getTime() - expectedStart.getTime())
-        const summaryMatch = calEvent.summary === dbEvent.courseName
-        
-        // Additional verification: check if the event has our app's extended properties
-        const hasAppMetadata = calEvent.extendedProperties?.private?.source === 'class_sync'
-        
-        return timeDiff <= 3600000 && summaryMatch && hasAppMetadata // 1 hour tolerance with metadata check
-      })
-      
-      if (similarCalendarEvents.length > 0) {
+      const matchingCalEvent = findMatchingCalendarEvent(dbEvent, calendarEvents, weekStart)
+
+      if (matchingCalEvent) {
         // Update database with the calendar event ID
-        const matchingCalEvent = similarCalendarEvents[0]
         await prisma.event.update({
           where: { id: dbEvent.id },
           data: { calendarEventId: matchingCalEvent.id }
@@ -186,7 +211,7 @@ export async function POST(
                 weekStart,
               },
             },
-            data: { data: scheduleData },
+            data: { data: scheduleData as any },
           })
           console.log('✅ [SyncDeleted] Updated week schedule to remove deleted events')
         }

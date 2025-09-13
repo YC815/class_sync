@@ -5,7 +5,7 @@ import { prisma } from '@/lib/prisma'
 import { GoogleCalendarService } from '@/lib/google-calendar'
 
 export async function POST(req: NextRequest) {
-  let allEvents: { googleEventId: string | null }[] = []
+  let allEvents: { calendarEventId: string | null }[] = []
   
   try {
     // Get session
@@ -23,9 +23,12 @@ export async function POST(req: NextRequest) {
       console.log('📅 [TestReset] Deleting all calendar events...')
       
       // Get all events from database first
-      allEvents = await prisma.calendarEvent.findMany({
-        where: { userId },
-        select: { googleEventId: true }
+      allEvents = await prisma.event.findMany({
+        where: {
+          userId,
+          calendarEventId: { not: null }
+        },
+        select: { calendarEventId: true }
       })
       
       console.log(`📅 [TestReset] Found ${allEvents.length} events to delete from calendar`)
@@ -36,10 +39,10 @@ export async function POST(req: NextRequest) {
         let oauthError = false
         
         for (const event of allEvents) {
-          if (event.googleEventId) {
+          if (event.calendarEventId) {
             try {
-              await calendarService.deleteEvent(event.googleEventId)
-              console.log(`✅ [TestReset] Deleted calendar event: ${event.googleEventId}`)
+              await calendarService.deleteEvent(event.calendarEventId)
+              console.log(`✅ [TestReset] Deleted calendar event: ${event.calendarEventId}`)
             } catch (error: any) {
               // Check for OAuth/authentication errors
               if (error.status === 401 || error.code === 401) {
@@ -49,9 +52,9 @@ export async function POST(req: NextRequest) {
               }
               // Ignore 410 (already deleted) and 404 (not found) errors
               else if (error.status === 410 || error.status === 404) {
-                console.log(`⚠️ [TestReset] Event already deleted: ${event.googleEventId}`)
+                console.log(`⚠️ [TestReset] Event already deleted: ${event.calendarEventId}`)
               } else {
-                console.error(`❌ [TestReset] Failed to delete event: ${event.googleEventId}`, error)
+                console.error(`❌ [TestReset] Failed to delete event: ${event.calendarEventId}`, error)
               }
             }
           }
@@ -67,7 +70,7 @@ export async function POST(req: NextRequest) {
       }
       
       // Delete all events from database
-      const deletedEvents = await prisma.calendarEvent.deleteMany({
+      const deletedEvents = await prisma.event.deleteMany({
         where: { userId }
       })
       console.log(`🗑️ [TestReset] Deleted ${deletedEvents.count} events from database`)
@@ -80,7 +83,7 @@ export async function POST(req: NextRequest) {
     // Step 2: Delete all week schedules
     try {
       console.log('🗓️ [TestReset] Deleting all week schedules...')
-      const deletedWeeks = await prisma.weekSchedule.deleteMany({
+      const deletedWeeks = await prisma.week.deleteMany({
         where: { userId }
       })
       console.log(`🗑️ [TestReset] Deleted ${deletedWeeks.count} week schedules`)

@@ -29,7 +29,7 @@ export default function ScheduleTableSkeleton() {
               ))}
             </TableRow>
           </TableHeader>
-          <TableBody>
+          {/* <TableBody>
             {PERIODS.map(period => (
               <React.Fragment key={period}>
                 <TableRow>
@@ -50,7 +50,7 @@ export default function ScheduleTableSkeleton() {
                 {period === 4 && (
                   <TableRow className="bg-yellow-50/50">
                     <TableCell className="font-medium text-center text-yellow-700">
-                      中
+                      中午
                     </TableCell>
                     <TableCell className="text-xs text-yellow-600">
                       11:55-13:25
@@ -64,7 +64,7 @@ export default function ScheduleTableSkeleton() {
                 )}
               </React.Fragment>
             ))}
-          </TableBody>
+          </TableBody> */}
         </Table>
       </div>
     </div>

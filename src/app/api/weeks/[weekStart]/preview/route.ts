@@ -57,7 +57,10 @@ export async function POST(
       courseName: e.courseName,
       weekday: e.weekday,
       periods: `${e.periodStart}-${e.periodEnd}`,
-      calendarEventId: e.calendarEventId
+      calendarEventId: e.calendarEventId,
+      baseName: e.baseName,
+      roomName: e.roomName,
+      address: e.address
     })))
 
     // Parse schedule data into individual period events
@@ -66,8 +69,8 @@ export async function POST(
     console.log('🔄 [Preview] Parsing schedule data into events')
     
     Object.keys(scheduleData).forEach(day => {
-      const dayNum = parseInt(day) // 1-5 for Monday-Friday
-      if (dayNum >= 1 && dayNum <= 5) {
+      const dayNum = parseInt(day) // 1-7 for Monday-Sunday
+      if (dayNum >= 1 && dayNum <= 7) {
         console.log(`🔄 [Preview] Processing day ${dayNum}:`, scheduleData[day])
         
         Object.keys(scheduleData[day]).forEach(period => {
@@ -78,13 +81,21 @@ export async function POST(
             console.log(`🔄 [Preview] Day ${dayNum}, Period ${periodNum}:`, cellData)
             
             if (cellData && (cellData.courseId || cellData.courseName)) {
+              // Construct location from cell data with priority: location > base+room > currentLocation
+              let eventLocation = cellData.location || currentLocation || ''
+              if (cellData.base || cellData.room) {
+                const basePart = cellData.base || ''
+                const roomPart = cellData.room || ''
+                eventLocation = basePart + (basePart && roomPart ? ' - ' : '') + roomPart
+              }
+
               const newEvent = {
                 weekday: dayNum,
                 periodStart: periodNum,
                 periodEnd: periodNum,
                 courseId: cellData.courseId,
                 courseName: cellData.courseName || cellData.courseId,
-                location: cellData.location || currentLocation,
+                location: eventLocation,
                 url: cellData.url
               }
               
@@ -143,22 +154,33 @@ export async function POST(
         console.log(`➕ [Preview] Event to CREATE: ${key}`)
         changes.create.push(newEvent)
       } else {
-        // Check if event needs updating (location, url, etc.)
+        // Check if event needs updating (location, course info, etc.)
         const existing = existingEventsMap.get(key)!
+
+        // Reconstruct existing event location from database fields
+        const existingBaseName = existing.baseName || ''
+        const existingRoomName = existing.roomName || ''
+        const existingLocation = existingBaseName + (existingBaseName && existingRoomName ? ' - ' : '') + existingRoomName
+
         console.log(`🔄 [Preview] Existing event found, checking for updates:`, {
           existing: {
             courseName: existing.courseName,
-            courseId: existing.courseId
+            courseId: existing.courseId,
+            location: existingLocation,
+            baseName: existing.baseName,
+            roomName: existing.roomName
           },
           new: {
             courseName: newEvent.courseName,
-            courseId: newEvent.courseId
+            courseId: newEvent.courseId,
+            location: newEvent.location
           }
         })
-        
+
         if (
           existing.courseName !== newEvent.courseName ||
-          existing.courseId !== newEvent.courseId
+          existing.courseId !== newEvent.courseId ||
+          existingLocation !== (newEvent.location || '')
         ) {
           console.log(`🔄 [Preview] Event to UPDATE: ${key}`)
           changes.update.push(newEvent)
