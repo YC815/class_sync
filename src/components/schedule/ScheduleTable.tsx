@@ -66,26 +66,7 @@ export default function ScheduleTable({
   // Always show all weekdays including weekends
   const currentWeekdays = WEEKDAYS_WITH_WEEKENDS
   
-  // Initialize weekend days in schedule
-  React.useEffect(() => {
-    const needsUpdate = !schedule[6] || !schedule[7]
-    if (needsUpdate) {
-      const newSchedule = { ...schedule }
-      if (!newSchedule[6]) {
-        newSchedule[6] = {}
-        for (let period = 1; period <= 8; period++) {
-          newSchedule[6][period] = null
-        }
-      }
-      if (!newSchedule[7]) {
-        newSchedule[7] = {}
-        for (let period = 1; period <= 8; period++) {
-          newSchedule[7][period] = null
-        }
-      }
-      onScheduleChange(newSchedule)
-    }
-  }, [schedule, onScheduleChange])
+  // Weekend initialization is now handled at the parent level to prevent flickers
   const updateCell = (day: number, period: number, data: ScheduleCell | null) => {
     const newSchedule = { ...schedule }
     newSchedule[day] = { ...newSchedule[day], [period]: data }
@@ -115,6 +96,14 @@ export default function ScheduleTable({
   const handleCourseSelect = (day: number, period: number, courseId: string) => {
     if (courseId === 'none' || courseId === '') {
       updateCell(day, period, null)
+
+      // 如果是奇數節次且下一節是連堂，清除下一節
+      const isOddPeriod = period % 2 === 1
+      const nextPeriod = period + 1
+      const nextCell = schedule[day]?.[nextPeriod]
+      if (isOddPeriod && nextCell?.isContinuation) {
+        updateCell(day, nextPeriod, null)
+      }
       return
     }
 
@@ -149,15 +138,23 @@ export default function ScheduleTable({
         base: undefined, // 重設基地選擇
         room: undefined  // 重設教室選擇
       })
+
+      // 如果是奇數節次且下一節是連堂，清除下一節
+      const isOddPeriod = period % 2 === 1
+      const nextPeriod = period + 1
+      const nextCell = schedule[day]?.[nextPeriod]
+      if (isOddPeriod && nextCell?.isContinuation) {
+        updateCell(day, nextPeriod, null)
+      }
     }
   }
 
   const handleBaseSelect = (day: number, period: number, baseId: string) => {
     const currentCell = schedule[day]?.[period]
     if (!currentCell) return
-    
+
     const base = bases.find(b => b.id === baseId)
-    
+
     updateCell(day, period, {
       ...currentCell,
       base: baseId === 'none' ? undefined : base?.name,
@@ -165,25 +162,51 @@ export default function ScheduleTable({
       placeId: baseId === 'none' ? undefined : base?.placeId,
       address: baseId === 'none' ? undefined : base?.address
     })
+
+    // 如果是奇數節次且下一節是連堂，清除下一節
+    const isOddPeriod = period % 2 === 1
+    const nextPeriod = period + 1
+    const nextCell = schedule[day]?.[nextPeriod]
+    if (isOddPeriod && nextCell?.isContinuation) {
+      updateCell(day, nextPeriod, null)
+    }
   }
 
   const handleRoomSelect = (day: number, period: number, room: string) => {
     const currentCell = schedule[day]?.[period]
     if (!currentCell) return
-    
+
     updateCell(day, period, {
       ...currentCell,
       room: room === 'none' ? undefined : room
     })
+
+    // 如果是奇數節次且下一節是連堂，清除下一節
+    const isOddPeriod = period % 2 === 1
+    const nextPeriod = period + 1
+    const nextCell = schedule[day]?.[nextPeriod]
+    if (isOddPeriod && nextCell?.isContinuation) {
+      updateCell(day, nextPeriod, null)
+    }
   }
 
   const handleAddTempCourse = (courseName: string) => {
-    updateCell(tempCourseDialog.day, tempCourseDialog.period, {
+    const { day, period } = tempCourseDialog
+
+    updateCell(day, period, {
       courseName,
       isTemporary: true,
       base: undefined,
       room: undefined
     })
+
+    // 如果是奇數節次且下一節是連堂，清除下一節
+    const isOddPeriod = period % 2 === 1
+    const nextPeriod = period + 1
+    const nextCell = schedule[day]?.[nextPeriod]
+    if (isOddPeriod && nextCell?.isContinuation) {
+      updateCell(day, nextPeriod, null)
+    }
   }
 
   // 檢查半天基地衝突（桌機用）
@@ -236,7 +259,7 @@ export default function ScheduleTable({
 
                 return (
                   <TableHead key={index} className={`text-center min-w-32 px-2 align-middle ${
-                    isWeekend ? 'bg-slate-50/50' : ''
+                    isWeekend ? 'bg-stone-300' : ''
                   }`}>
                     <div className="flex flex-col items-center">
                       <span>{day}</span>
@@ -258,15 +281,15 @@ export default function ScheduleTable({
               <TableCell className="text-xs text-blue-600">
                 基地整理
               </TableCell>
-              {currentWeekdays.map((_, dayIndex) => {
-                const day = dayIndex + 1
+              {currentWeekdays.map((_, index) => {
+                const day = index + 1
                 const morningBase = getHalfDayBaseDisplay(day, 'morning')
                 const morningConflict = checkHalfDayBaseConflict(day, 'morning')
-                const isWeekend = dayIndex >= 5
+                const isWeekend = index >= 5
 
                 return (
-                  <TableCell key={`morning-base-${dayIndex}`} className={`text-center text-xs font-medium ${
-                    isWeekend ? 'bg-slate-50/50' : ''
+                  <TableCell key={`morning-base-${index}`} className={`text-center text-xs font-medium ${
+                    isWeekend ? 'bg-gray-100' : ''
                   }`}>
                     <div className={`px-2 py-1 rounded ${
                       morningConflict
@@ -290,14 +313,14 @@ export default function ScheduleTable({
                   <TableCell className="text-xs text-muted-foreground align-top">
                     {PERIOD_TIMES[period as keyof typeof PERIOD_TIMES]}
                   </TableCell>
-                  {currentWeekdays.map((_, dayIndex) => {
-                    const day = dayIndex + 1
+                  {currentWeekdays.map((_, index) => {
+                    const day = index + 1
                     const cell = schedule[day]?.[period]
-                    const isWeekend = dayIndex >= 5
+                    const isWeekend = index >= 5
 
                     return (
                       <TableCell key={`${day}-${period}`} className={`p-1 sm:p-2 h-20 align-top ${
-                        isWeekend ? 'bg-slate-50/20' : ''
+                        isWeekend ? 'bg-gray-50' : ''
                       }`}>
                         <div className="space-y-1 h-full flex flex-col justify-start">
                           <Select
@@ -433,15 +456,15 @@ export default function ScheduleTable({
                       <TableCell className="text-xs text-blue-600">
                         基地整理
                       </TableCell>
-                      {currentWeekdays.map((_, dayIndex) => {
-                        const day = dayIndex + 1
+                      {currentWeekdays.map((_, index) => {
+                        const day = index + 1
                         const afternoonBase = getHalfDayBaseDisplay(day, 'afternoon')
                         const afternoonConflict = checkHalfDayBaseConflict(day, 'afternoon')
-                        const isWeekend = dayIndex >= 5
+                        const isWeekend = index >= 5
 
                         return (
-                          <TableCell key={`afternoon-base-${dayIndex}`} className={`text-center text-xs font-medium ${
-                            isWeekend ? 'bg-slate-50/50' : ''
+                          <TableCell key={`afternoon-base-${index}`} className={`text-center text-xs font-medium ${
+                            isWeekend ? 'bg-stone-300' : ''
                           }`}>
                             <div className={`px-2 py-1 rounded ${
                               afternoonConflict

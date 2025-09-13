@@ -68,29 +68,64 @@ export async function ensureUserExists(userId: string): Promise<boolean> {
 /**
  * 為新用戶初始化預設的基地和教室
  */
-export async function initializeUserDefaults(userId: string) {
+export async function initializeUserDefaults(userId: string, userInfo?: { name?: string | null; email?: string | null; image?: string | null }) {
   try {
-    // 先確保用戶存在
-    const userExists = await ensureUserExists(userId)
+    console.log(`🔧 [InitUserDefaults] Starting initialization for user: ${userId}`)
+
+    // 先確保用戶存在，如果不存在則嘗試創建
+    let userExists = await ensureUserExists(userId)
+    console.log(`🔍 [InitUserDefaults] User exists check result: ${userExists}`)
+
     if (!userExists) {
-      console.error(`User ${userId} does not exist in database, cannot initialize defaults`)
+      console.log(`🔧 [InitUserDefaults] User ${userId} does not exist, attempting to create...`)
+
+      // 嘗試創建用戶
+      try {
+        await prisma.user.create({
+          data: {
+            id: userId,
+            name: userInfo?.name || 'Unknown User',
+            email: userInfo?.email || null,
+            image: userInfo?.image || null,
+          }
+        })
+        console.log(`✅ [InitUserDefaults] Successfully created user: ${userId}`)
+        userExists = true
+      } catch (createError) {
+        console.error(`❌ [InitUserDefaults] Failed to create user ${userId}:`, createError)
+        return false
+      }
+    }
+
+    if (!userExists) {
+      console.error(`❌ [InitUserDefaults] User ${userId} still does not exist after creation attempt`)
       return false
     }
 
     // 檢查是否已經初始化過
     const existingBases = await hasUserBases(userId)
+    console.log(`🔍 [InitUserDefaults] User already has bases: ${existingBases}`)
     if (existingBases) {
-      console.log(`User ${userId} already has bases, skipping initialization`)
+      console.log(`⏭️ [InitUserDefaults] User ${userId} already has bases, skipping initialization`)
       return true
     }
 
-    console.log(`Initializing default bases for user ${userId}`)
+    console.log(`🏗️ [InitUserDefaults] Initializing default bases for user ${userId}`)
+    console.log(`📋 [InitUserDefaults] Default bases to create:`)
+    DEFAULT_BASES.forEach((base, index) => {
+      console.log(`  ${index + 1}. ${base.name} (${base.isSingleRoom ? 'Single Room' : base.rooms.length + ' rooms'})`)
+    })
 
     // 使用事務確保原子操作
     await prisma.$transaction(async (tx) => {
+      console.log(`💫 [InitUserDefaults] Starting transaction...`)
+
       // 為用戶創建預設基地和教室
-      for (const baseData of DEFAULT_BASES) {
-        await tx.base.create({
+      for (let i = 0; i < DEFAULT_BASES.length; i++) {
+        const baseData = DEFAULT_BASES[i]
+        console.log(`📍 [InitUserDefaults] Creating base ${i + 1}: ${baseData.name}`)
+
+        const createdBase = await tx.base.create({
           data: {
             name: baseData.name,
             address: baseData.address,
@@ -102,15 +137,30 @@ export async function initializeUserDefaults(userId: string) {
                 userId: userId
               }))
             } : undefined
+          },
+          include: {
+            rooms: true
           }
         })
+
+        console.log(`✅ [InitUserDefaults] Created base: ${createdBase.name} with ${createdBase.rooms.length} rooms`)
+        createdBase.rooms.forEach(room => {
+          console.log(`    - Room: ${room.name}`)
+        })
       }
+
+      console.log(`💫 [InitUserDefaults] Transaction completed successfully`)
     })
 
-    console.log(`Successfully initialized ${DEFAULT_BASES.length} default bases for user ${userId}`)
+    console.log(`✅ [InitUserDefaults] Successfully initialized ${DEFAULT_BASES.length} default bases for user ${userId}`)
+
+    // 最終驗證
+    const finalBasesCount = await prisma.base.count({ where: { userId } })
+    console.log(`🔍 [InitUserDefaults] Final verification - user now has ${finalBasesCount} bases`)
+
     return true
   } catch (error) {
-    console.error(`Failed to initialize defaults for user ${userId}:`, error)
+    console.error(`❌ [InitUserDefaults] Failed to initialize defaults for user ${userId}:`, error)
     return false
   }
 }

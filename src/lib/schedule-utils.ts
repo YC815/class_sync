@@ -36,30 +36,21 @@ export function formatDateRange(weekStart: Date): string {
 
 export function initializeEmptySchedule(): WeekSchedule {
   const schedule: WeekSchedule = {}
-  
-  // Initialize weekdays (1-5) by default
-  for (let day = 1; day <= 5; day++) {
-    schedule[day] = {}
-    for (let period = 1; period <= 8; period++) {
-      schedule[day][period] = null
-    }
-  }
-  
-  return schedule
-}
 
-export function initializeEmptyScheduleWithWeekends(): WeekSchedule {
-  const schedule: WeekSchedule = {}
-  
-  // Initialize all 7 days (1-7: Mon-Sun)
+  // Always initialize all 7 days (1-7: Mon-Sun) - merged functionality
   for (let day = 1; day <= 7; day++) {
     schedule[day] = {}
     for (let period = 1; period <= 8; period++) {
       schedule[day][period] = null
     }
   }
-  
+
   return schedule
+}
+
+// Legacy alias for backward compatibility
+export function initializeEmptyScheduleWithWeekends(): WeekSchedule {
+  return initializeEmptySchedule()
 }
 
 export function mergeAdjacentPeriods(events: ScheduleEvent[]): ScheduleEvent[] {

@@ -1,20 +1,9 @@
 'use client'
 
 import { useState, useEffect, useRef, useCallback } from 'react'
-import { useSession, signOut } from 'next-auth/react'
+import { useSession, signOut, signIn } from 'next-auth/react'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Button } from '@/components/ui/button'
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-  AlertDialogTrigger,
-} from '@/components/ui/alert-dialog'
 import ScheduleTable from '@/components/schedule/ScheduleTable'
 import ScheduleTableSkeleton from '@/components/schedule/ScheduleTableSkeleton'
 import MobileDayView from '@/components/schedule/MobileDayView'
@@ -24,9 +13,9 @@ import CourseManager from '@/components/courses/CourseManager'
 import CourseManagerSkeleton from '@/components/courses/CourseManagerSkeleton'
 import RoomManager from '@/components/rooms/RoomManager'
 import RoomManagerSkeleton from '@/components/rooms/RoomManagerSkeleton'
-import AuthButton from '@/components/auth/AuthButton'
+import UserAccountDropdown from '@/components/auth/UserAccountDropdown'
 import { WeekSchedule, Course, Base, ScheduleEvent } from '@/lib/types'
-import { getWeekStart, initializeEmptySchedule } from '@/lib/schedule-utils'
+import { getWeekStart, initializeEmptyScheduleWithWeekends } from '@/lib/schedule-utils'
 import { useNavbarHeight } from '@/lib/hooks'
 import { toast } from 'sonner'
 
@@ -41,7 +30,7 @@ export default function Home() {
   const navbarRef = useRef<HTMLElement>(null!)
   useNavbarHeight(navbarRef)
   const [currentWeek, setCurrentWeek] = useState<Date | null>(null)
-  const [schedule, setSchedule] = useState<WeekSchedule>(initializeEmptySchedule())
+  const [schedule, setSchedule] = useState<WeekSchedule>(initializeEmptyScheduleWithWeekends())
   const [courses, setCourses] = useState<Course[]>([])
   const [bases, setBases] = useState<Base[]>([])
   const [previewChanges, setPreviewChanges] = useState<{
@@ -94,7 +83,9 @@ export default function Home() {
       const response = await fetch('/api/bases')
       if (response.ok) {
         const data = await response.json()
-        setBases(data)
+        // Handle both array format (old) and object format (new) responses
+        const basesArray = Array.isArray(data) ? data : (data.bases || [])
+        setBases(basesArray)
       }
     } catch (error) {
       console.error('Failed to load bases:', error)
@@ -128,8 +119,16 @@ export default function Home() {
       // 處理課表載入
       if (scheduleResponse.ok) {
         const data = await scheduleResponse.json()
-        if (data.schedule) {
-          setSchedule(data.schedule)
+        if (data.schedule && Object.keys(data.schedule).length > 0) {
+          // 確保載入的課表包含週末資料結構
+          const fullSchedule = initializeEmptyScheduleWithWeekends()
+          Object.keys(data.schedule).forEach(day => {
+            const dayNum = parseInt(day)
+            if (dayNum >= 1 && dayNum <= 7) {
+              fullSchedule[dayNum] = data.schedule[dayNum] || {}
+            }
+          })
+          setSchedule(fullSchedule)
           console.log(`載入 ${weekStartStr} 週課表:`, data.totalEvents || Object.keys(data.schedule).length, '個時段')
 
           // 顯示恢復結果通知
@@ -137,13 +136,15 @@ export default function Home() {
             toast.success(`已從 Google Calendar 自動恢復 ${data.recoveryInfo.recoveredEvents} 個事件`)
           }
         } else {
-          setSchedule(initializeEmptySchedule())
+          // 只在沒有資料時才設定空課表
+          setSchedule(initializeEmptyScheduleWithWeekends())
         }
       } else if (scheduleResponse.status === 404) {
-        setSchedule(initializeEmptySchedule())
+        setSchedule(initializeEmptyScheduleWithWeekends())
       } else {
         console.warn('載入週課表失敗:', scheduleResponse.status)
         setSyncError('載入週課表失敗')
+        // 載入失敗時不重設課表，保持現有狀態
       }
 
       // 處理同步刪除的結果（背景處理，不影響主要流程）
@@ -162,7 +163,7 @@ export default function Home() {
     } catch (error) {
       console.error('載入週課表錯誤:', error)
       setSyncError('載入週課表失敗')
-      setSchedule(initializeEmptySchedule())
+      // 網路錯誤時不重設課表，避免閃爍
     } finally {
       setIsLoadingSchedule(false)
     }
@@ -453,17 +454,11 @@ export default function Home() {
       const data = await response.json()
       console.log('✅ [TestReset] Reset successful:', data)
       toast.success(data.message || '測試重置完成！')
-      
-      // Reset local state
-      setSchedule(initializeEmptySchedule())
-      setPreviewChanges(undefined)
-      
-      // Reload data
-      if (currentWeek) {
-        await loadWeekSchedule(currentWeek)
-      }
-      await loadCourses()
-      await loadBases()
+
+      // Force page reload to ensure all components refresh with new data
+      setTimeout(() => {
+        window.location.reload()
+      }, 1000) // Give user time to see the success message
       
     } catch (error) {
       console.error('❌ [TestReset] Reset failed:', error)
@@ -495,7 +490,18 @@ export default function Home() {
             <p className="text-muted-foreground mb-2">請先登入 Google 帳號以開始使用</p>
             <p className="text-sm text-blue-600 font-medium">建議使用 T-school 學校帳號登入</p>
           </div>
-          <AuthButton />
+          <Button
+            onClick={() => signIn('google')}
+            className="gap-2"
+          >
+            <svg className="w-4 h-4" viewBox="0 0 24 24">
+              <path fill="currentColor" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/>
+              <path fill="currentColor" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/>
+              <path fill="currentColor" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z"/>
+              <path fill="currentColor" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"/>
+            </svg>
+            使用 Google 登入
+          </Button>
         </div>
       </div>
     )
@@ -519,49 +525,10 @@ export default function Home() {
             </div>
             
             <div className="flex items-center space-x-2 md:space-x-4">
-              {/* Test Reset Button - Only show in development/testing */}
-              <AlertDialog>
-                <AlertDialogTrigger asChild>
-                  <Button 
-                    variant="outline" 
-                    size="sm"
-                    className="text-red-600 border-red-300 hover:bg-red-50"
-                  >
-                    🧪 測試重置
-                  </Button>
-                </AlertDialogTrigger>
-                <AlertDialogContent>
-                  <AlertDialogHeader>
-                    <AlertDialogTitle>確認測試重置</AlertDialogTitle>
-                    <AlertDialogDescription>
-                      此操作將會執行以下動作，請謹慎確認。
-                    </AlertDialogDescription>
-                    <div className="space-y-2 text-sm">
-                      <ul className="list-disc list-inside space-y-1">
-                        <li className="text-red-600">刪除所有Google Calendar事件</li>
-                        <li className="text-red-600">清除所有週課表資料</li>
-                        <li className="text-red-600">重置教室為預設值（吉林、弘道、線上）</li>
-                        <li className="text-green-600">保留所有課程資料</li>
-                      </ul>
-                      <div className="text-red-600 font-semibold mt-4">
-                        ⚠️ 此操作無法復原，請謹慎使用！
-                      </div>
-                    </div>
-                  </AlertDialogHeader>
-                  <AlertDialogFooter>
-                    <AlertDialogCancel>取消</AlertDialogCancel>
-                    <AlertDialogAction
-                      onClick={handleTestReset}
-                      disabled={isResetting}
-                      className="bg-red-600 hover:bg-red-700"
-                    >
-                      {isResetting ? '重置中...' : '確認重置'}
-                    </AlertDialogAction>
-                  </AlertDialogFooter>
-                </AlertDialogContent>
-              </AlertDialog>
-              
-              <AuthButton />
+              <UserAccountDropdown
+                onTestReset={handleTestReset}
+                isResetting={isResetting}
+              />
             </div>
           </div>
           
@@ -599,7 +566,7 @@ export default function Home() {
                 }}
               />
               
-              {(isLoadingSchedule || isLoadingCourses || isLoadingBases) ? (
+              {isLoadingSchedule ? (
                 <>
                   {/* 桌面版載入骨架 */}
                   <div className="hidden md:block">

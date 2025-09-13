@@ -17,13 +17,14 @@ model User {
   accounts      Account[]
   sessions      Session[]
   createdAt     DateTime  @default(now()) @map("created_at")
-  
+
   courses Course[]
   bases   Base[]
   rooms   Room[]
   weeks   Week[]
   events  Event[]
-  
+  linkTypes LinkType[]
+
   @@map("users")
 }
 
@@ -171,4 +172,18 @@ model Event {
   @@index([roomId])
   @@index([calendarEventId])
   @@index([seriesId])
+}
+
+model LinkType {
+  id        String   @id @default(cuid())
+  userId    String   @map("user_id")
+  name      String
+  isDefault Boolean  @default(false) @map("is_default")
+  createdAt DateTime @default(now()) @map("created_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, name])
+  @@map("link_types")
+  @@index([userId])
 }

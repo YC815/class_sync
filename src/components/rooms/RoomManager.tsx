@@ -51,20 +51,45 @@ export default function RoomManager() {
 
   // 載入基地資料
   useEffect(() => {
+    console.log('🔧 [RoomManager] useEffect triggered, session user ID:', session?.user?.id)
     if (session?.user?.id) {
+      console.log('👤 [RoomManager] User authenticated, calling loadBases')
       loadBases()
+    } else {
+      console.log('❌ [RoomManager] No authenticated user, skipping loadBases')
     }
   }, [session])
 
   const loadBases = async () => {
+    console.log('📡 [RoomManager] loadBases called')
     try {
+      console.log('🚀 [RoomManager] Fetching /api/bases')
       const response = await fetch('/api/bases')
+      console.log(`📊 [RoomManager] Response status: ${response.status} ${response.statusText}`)
+
       if (response.ok) {
         const data = await response.json()
-        setBases(data)
+
+        // Handle new response format with debug info
+        const bases = data.bases || data  // Support both old and new format
+        const debug = data.debug
+
+        console.log(`✅ [RoomManager] Received ${bases.length} bases from API:`)
+        if (debug) {
+          console.log(`🐛 [RoomManager] Debug info:`, debug)
+        }
+
+        bases.forEach((base: Base, index: number) => {
+          console.log(`  ${index + 1}. ${base.name} (${base.rooms?.length || 0} rooms)`)
+        })
+
+        setBases(bases)
+        console.log('📝 [RoomManager] setBases called with new data')
+      } else {
+        console.error('❌ [RoomManager] API request failed:', response.status, response.statusText)
       }
     } catch (error) {
-      console.error('Failed to load bases:', error)
+      console.error('❌ [RoomManager] Failed to load bases:', error)
     }
   }
 
@@ -471,10 +496,7 @@ export default function RoomManager() {
             </CardHeader>
             
             <CardContent>
-              {base.isSingleRoom ? (
-                <div className="text-sm text-muted-foreground italic">
-                  此基地為單一教室配置
-                </div>
+              {base.isSingleRoom ? (<div></div>
               ) : base.rooms && base.rooms.length > 0 ? (
                 <div className="rounded-lg border overflow-hidden">
                   <Table>

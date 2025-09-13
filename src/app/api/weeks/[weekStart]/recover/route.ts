@@ -155,6 +155,72 @@ export async function POST(
         } else if (!matchingDbEvent) {
           // Create new database event
           try {
+            // Try to extract detailed location info from metadata first
+            let baseName: string | null = null
+            let roomName: string | null = null
+            let address: string | null = null
+
+            // Extract from description metadata if available
+            const descMetadata = extractMetadataFromDescription(calEvent.description || '')
+            if (descMetadata?.location) {
+              console.log(`🔍 [Recovery] Found location in description metadata:`, descMetadata.location)
+              baseName = descMetadata.location
+              address = descMetadata.address || null
+            } else if ((metadata as any)?.location) {
+              // If extended properties has location info, use it
+              console.log(`🔍 [Recovery] Found location in extended properties:`, (metadata as any).location)
+              baseName = (metadata as any).location
+              address = (metadata as any).address || null
+            } else {
+              // Fallback to calendar event location field
+              console.log(`🔍 [Recovery] Using calendar event location:`, calEvent.location)
+              baseName = calEvent.location || null
+              address = calEvent.location || null
+            }
+
+            // Try to extract base and room from location string if it's in "base - room" format
+            if (baseName && baseName.includes(' - ')) {
+              const parts = baseName.split(' - ')
+              if (parts.length === 2) {
+                baseName = parts[0].trim()
+                roomName = parts[1].trim()
+                console.log(`🔍 [Recovery] Split location into base: "${baseName}" and room: "${roomName}"`)
+              }
+            }
+
+            // Try to find matching base and room IDs from the database
+            let baseId: string | null = null
+            let roomId: string | null = null
+
+            if (baseName) {
+              const matchingBase = await prisma.base.findFirst({
+                where: {
+                  userId,
+                  name: baseName
+                }
+              })
+              baseId = matchingBase?.id || null
+
+              if (matchingBase && roomName) {
+                const matchingRoom = await prisma.room.findFirst({
+                  where: {
+                    userId,
+                    baseId: matchingBase.id,
+                    name: roomName
+                  }
+                })
+                roomId = matchingRoom?.id || null
+              }
+            }
+
+            console.log(`🔗 [Recovery] Database matching:`, {
+              baseName,
+              roomName,
+              baseId,
+              roomId,
+              address
+            })
+
             const newEvent = await prisma.event.create({
               data: {
                 userId,
@@ -166,8 +232,11 @@ export async function POST(
                 courseName,
                 calendarEventId: calEvent.id,
                 seriesId: metadata?.seriesId || null,
-                baseName: calEvent.location || null,
-                address: calEvent.location || null,
+                baseId: baseId,
+                roomId: roomId,
+                baseName: baseName,
+                roomName: roomName,
+                address: address,
               }
             })
             recoveredEvents++

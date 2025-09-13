@@ -3,6 +3,7 @@ import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 import { GoogleCalendarService } from '@/lib/google-calendar'
+import { initializeUserDefaults } from '@/lib/user-init'
 
 export async function POST(req: NextRequest) {
   let allEvents: { calendarEventId: string | null }[] = []
@@ -91,16 +92,55 @@ export async function POST(req: NextRequest) {
       console.error('❌ [TestReset] Error deleting week schedules:', error)
     }
 
-    // Step 3: Reset bases to default (delete all, will trigger re-initialization)
+    // Step 3: Reset bases to default (delete all and re-initialize)
     try {
       console.log('🏠 [TestReset] Resetting bases to default...')
-      
+      console.log(`🔍 [TestReset] Current userId: ${userId}`)
+
+      // Check existing bases before deletion
+      const existingBasesBeforeDeletion = await prisma.base.findMany({
+        where: { userId },
+        include: { rooms: true }
+      })
+      console.log(`📊 [TestReset] Found ${existingBasesBeforeDeletion.length} existing bases before deletion:`)
+      existingBasesBeforeDeletion.forEach(base => {
+        console.log(`  - Base: ${base.name} (${base.rooms.length} rooms)`)
+      })
+
       // Delete all bases for this user (including rooms via cascade)
       const deletedBases = await prisma.base.deleteMany({
         where: { userId }
       })
       console.log(`🗑️ [TestReset] Deleted ${deletedBases.count} bases (rooms deleted via cascade)`)
-      
+
+      // Verify deletion
+      const basesAfterDeletion = await prisma.base.count({
+        where: { userId }
+      })
+      console.log(`🔍 [TestReset] Bases count after deletion: ${basesAfterDeletion}`)
+
+      // Re-initialize default bases and rooms
+      console.log('🏗️ [TestReset] Re-initializing default bases and rooms...')
+      const initSuccess = await initializeUserDefaults(userId)
+      if (initSuccess) {
+        console.log('✅ [TestReset] initializeUserDefaults returned true')
+
+        // Verify re-initialization
+        const basesAfterInit = await prisma.base.findMany({
+          where: { userId },
+          include: { rooms: true }
+        })
+        console.log(`📊 [TestReset] After re-initialization, found ${basesAfterInit.length} bases:`)
+        basesAfterInit.forEach(base => {
+          console.log(`  - Base: ${base.name} (${base.rooms.length} rooms)`)
+          base.rooms.forEach(room => {
+            console.log(`    - Room: ${room.name}`)
+          })
+        })
+      } else {
+        console.error('❌ [TestReset] initializeUserDefaults returned false')
+      }
+
     } catch (error) {
       console.error('❌ [TestReset] Error resetting bases:', error)
     }

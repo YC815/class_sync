@@ -25,6 +25,7 @@ import { Plus, Edit2, Trash2, Link, Save, X } from 'lucide-react'
 import { Course, CourseLink } from '@/lib/types'
 import { useSession } from 'next-auth/react'
 import { toast } from 'sonner'
+import LinkNameSelect from './LinkNameSelect'
 
 interface CourseManagerProps {
   courses: Course[]
@@ -200,14 +201,14 @@ export default function CourseManager({ courses, onCoursesChange }: CourseManage
                   {formData.links.map((link, index) => (
                     <div key={index} className="flex gap-2 items-end">
                       <div className="flex-1">
-                        <Input
-                          placeholder="連結名稱"
+                        <LinkNameSelect
                           value={link.name}
-                          onChange={(e) => {
+                          onChange={(newName) => {
                             const newLinks = [...formData.links]
-                            newLinks[index].name = e.target.value
+                            newLinks[index].name = newName
                             setFormData({ ...formData, links: newLinks })
                           }}
+                          placeholder="選擇連結名稱"
                         />
                       </div>
                       <div className="flex-1">

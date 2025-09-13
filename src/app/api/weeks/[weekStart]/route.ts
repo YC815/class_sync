@@ -132,6 +132,55 @@ async function recoverEventsFromCalendar(
           }
         } else {
           // Create new Event record
+          // Try to extract detailed location info from metadata first
+          let baseName: string | null = null
+          let roomName: string | null = null
+          let address: string | null = null
+
+          // Extract from description metadata if available
+          const descMetadata = extractMetadataFromDescription(calEvent.description || '')
+          if (descMetadata?.location) {
+            console.log(`🔍 [Recovery] Found location in description metadata:`, descMetadata.location)
+            baseName = descMetadata.location
+            address = descMetadata.address || null
+          } else if ((metadata as any)?.location) {
+            // If extended properties has location info, use it
+            console.log(`🔍 [Recovery] Found location in extended properties:`, (metadata as any).location)
+            baseName = (metadata as any).location
+            address = (metadata as any).address || null
+          } else {
+            // Fallback to calendar event location field
+            console.log(`🔍 [Recovery] Using calendar event location:`, calEvent.location)
+            baseName = calEvent.location || null
+            address = calEvent.location || null
+          }
+
+          // Try to extract base and room from location string if it's in "base - room" format
+          if (baseName && baseName.includes(' - ')) {
+            const parts = baseName.split(' - ')
+            if (parts.length === 2) {
+              baseName = parts[0].trim()
+              roomName = parts[1].trim()
+              console.log(`🔍 [Recovery] Split location into base: "${baseName}" and room: "${roomName}"`)
+            }
+          }
+
+          // 確保 Week 記錄存在，如果不存在則創建
+          await prisma.week.upsert({
+            where: {
+              userId_weekStart: {
+                userId,
+                weekStart
+              }
+            },
+            update: {},
+            create: {
+              userId,
+              weekStart,
+              data: { 1: {}, 2: {}, 3: {}, 4: {}, 5: {}, 6: {}, 7: {} }
+            }
+          })
+
           const newEvent = await prisma.event.create({
             data: {
               userId,
@@ -143,8 +192,9 @@ async function recoverEventsFromCalendar(
               courseName,
               calendarEventId: calEvent.id,
               seriesId: metadata?.seriesId || null,
-              baseName: calEvent.location || null,
-              address: calEvent.location || null,
+              baseName: baseName,
+              roomName: roomName,
+              address: address,
             }
           })
 
@@ -197,7 +247,7 @@ export async function GET(
     console.log('Fetching schedule for:', { userId, weekStart: weekStart.toISOString() })
 
     let schedule: WeekSchedule = {
-      1: {}, 2: {}, 3: {}, 4: {}, 5: {}
+      1: {}, 2: {}, 3: {}, 4: {}, 5: {}, 6: {}, 7: {}
     }
 
     let totalEvents = 0
@@ -254,7 +304,7 @@ export async function GET(
         totalEvents = events.length
 
         // 重建完整課表
-        schedule = { 1: {}, 2: {}, 3: {}, 4: {}, 5: {} }
+        schedule = { 1: {}, 2: {}, 3: {}, 4: {}, 5: {}, 6: {}, 7: {} }
         events.forEach(event => {
           // 為每個時段填入課程資訊
           for (let period = event.periodStart; period <= event.periodEnd; period++) {
@@ -264,7 +314,13 @@ export async function GET(
 
             schedule[event.weekday][period] = {
               courseId: event.courseId || undefined,
-              courseName: event.courseName || ''
+              courseName: event.courseName || '',
+              base: event.baseName || undefined,
+              room: event.roomName || undefined,
+              location: event.baseName ?
+                (event.baseName + (event.roomName ? ' - ' + event.roomName : '')) :
+                undefined,
+              address: event.address || undefined,
             }
           }
         })
@@ -295,7 +351,13 @@ export async function GET(
 
             schedule[event.weekday][period] = {
               courseId: event.courseId || undefined,
-              courseName: event.courseName || ''
+              courseName: event.courseName || '',
+              base: event.baseName || undefined,
+              room: event.roomName || undefined,
+              location: event.baseName ?
+                (event.baseName + (event.roomName ? ' - ' + event.roomName : '')) :
+                undefined,
+              address: event.address || undefined,
             }
           }
         })
@@ -303,10 +365,29 @@ export async function GET(
     } catch (dbError) {
       console.error('Database error:', dbError)
       // 如果資料庫查詢失敗，返回空課表而不是錯誤
+      // 確保返回完整的週課表結構
+      schedule = { 1: {}, 2: {}, 3: {}, 4: {}, 5: {}, 6: {}, 7: {} }
+      for (let day = 1; day <= 7; day++) {
+        for (let period = 1; period <= 8; period++) {
+          schedule[day][period] = null
+        }
+      }
+    }
+
+    // 確保返回的課表包含完整的週末結構
+    const completeSchedule: WeekSchedule = { 1: {}, 2: {}, 3: {}, 4: {}, 5: {}, 6: {}, 7: {} }
+    for (let day = 1; day <= 7; day++) {
+      completeSchedule[day as keyof WeekSchedule] = schedule[day] || {}
+      // 確保每一天都有完整的時段結構
+      for (let period = 1; period <= 8; period++) {
+        if (completeSchedule[day as keyof WeekSchedule][period] === undefined) {
+          completeSchedule[day as keyof WeekSchedule][period] = null
+        }
+      }
     }
 
     return NextResponse.json({
-      schedule,
+      schedule: completeSchedule,
       weekStart: formatDateLocal(weekStart),
       totalEvents,
       recoveryInfo: recoveryInfo?.recoveredEvents ? {
