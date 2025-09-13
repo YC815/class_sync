@@ -1,18 +1,23 @@
 'use client'
 
 import { Button } from '@/components/ui/button'
-import { ChevronLeft, ChevronRight } from 'lucide-react'
+import { ChevronLeft, ChevronRight, Copy } from 'lucide-react'
 import { formatDateRange } from '@/lib/schedule-utils'
+import { toast } from 'sonner'
+import { useState } from 'react'
 
 interface WeekNavigationProps {
   currentWeek: Date
   onWeekChange: (week: Date) => void
+  onScheduleUpdated?: (schedule: any) => void
 }
 
 export default function WeekNavigation({ 
   currentWeek, 
-  onWeekChange 
+  onWeekChange,
+  onScheduleUpdated
 }: WeekNavigationProps) {
+  const [isLoading, setIsLoading] = useState(false)
   // Get week indicator (本週/下週)
   const getWeekIndicator = () => {
     const today = new Date()
@@ -70,6 +75,34 @@ export default function WeekNavigation({
     onWeekChange(thisWeekStart)
   }
 
+  const copyPreviousWeek = async () => {
+    setIsLoading(true)
+    try {
+      const weekStartStr = currentWeek.toISOString().split('T')[0]
+      const response = await fetch(`/api/weeks/${weekStartStr}/copy-previous`, {
+        method: 'POST'
+      })
+
+      if (response.ok) {
+        const data = await response.json()
+        toast.success(data.message || '成功複製上週課表')
+        
+        // 通知父組件更新課表
+        if (onScheduleUpdated && data.schedule) {
+          onScheduleUpdated(data.schedule)
+        }
+      } else {
+        const errorData = await response.json()
+        toast.error(errorData.error || '複製上週課表失敗')
+      }
+    } catch (error) {
+      console.error('Failed to copy previous week:', error)
+      toast.error('複製上週課表失敗')
+    } finally {
+      setIsLoading(false)
+    }
+  }
+
   return (
     <div className="flex flex-col items-center space-y-4">
       {/* 日期區塊置中 */}
@@ -108,7 +141,7 @@ export default function WeekNavigation({
         </Button>
       </div>
 
-      {/* 本週和下週按鈕在日期下方 */}
+      {/* 本週、下週和複製上週按鈕在日期下方 */}
       <div className="flex items-center gap-2">
         <Button 
           variant="outline" 
@@ -123,6 +156,16 @@ export default function WeekNavigation({
           onClick={goToAbsoluteNextWeek}
         >
           下週
+        </Button>
+        <Button 
+          variant="outline" 
+          size="sm"
+          onClick={copyPreviousWeek}
+          disabled={isLoading}
+          className="gap-2"
+        >
+          <Copy className="w-4 h-4" />
+          {isLoading ? '複製中...' : '複製上週'}
         </Button>
       </div>
     </div>

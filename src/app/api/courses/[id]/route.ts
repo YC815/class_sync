@@ -65,6 +65,34 @@ export async function PATCH(
       }
     })
 
+    // 如果課程名稱有變更，更新相關的 Event 記錄
+    if (name !== existingCourse.name) {
+      const currentWeek = new Date()
+      currentWeek.setHours(0, 0, 0, 0)
+      
+      // 計算本週的週一
+      const dayOfWeek = currentWeek.getDay()
+      const monday = new Date(currentWeek)
+      monday.setDate(currentWeek.getDate() - (dayOfWeek === 0 ? 6 : dayOfWeek - 1))
+      
+      // 更新當週及未來的 Events（只更新 overrideTitle = false 的事件）
+      const updateResult = await prisma.event.updateMany({
+        where: {
+          courseId: resolvedParams.id,
+          userId: session.user.id,
+          weekStart: {
+            gte: monday
+          },
+          overrideTitle: false
+        },
+        data: {
+          courseName: name
+        }
+      })
+      
+      console.log(`Updated ${updateResult.count} events for course name change: "${existingCourse.name}" -> "${name}"`)
+    }
+
     return NextResponse.json(course)
   } catch (error) {
     console.error('Error updating course:', error)

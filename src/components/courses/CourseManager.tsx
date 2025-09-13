@@ -8,6 +8,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import {
   Dialog,
   DialogContent,
+  DialogDescription,
   DialogHeader,
   DialogTitle,
   DialogTrigger,
@@ -169,6 +170,9 @@ export default function CourseManager({ courses, onCoursesChange }: CourseManage
               <DialogTitle>
                 {editingCourse ? '編輯課程' : '新增課程'}
               </DialogTitle>
+              <DialogDescription>
+                {editingCourse ? '編輯課程資訊及相關連結' : '建立新的課程並添加相關連結'}
+              </DialogDescription>
             </DialogHeader>
             <form onSubmit={handleSubmit} className="space-y-4">
               <div>

@@ -40,6 +40,12 @@ export class GoogleCalendarService {
     const weekEnd = new Date(weekStart)
     weekEnd.setDate(weekStart.getDate() + 6)
 
+    console.log('🔍 [GoogleCalendar] Listing events:', {
+      weekStart: weekStart.toISOString(),
+      weekEnd: weekEnd.toISOString(),
+      calendarId: 'primary'
+    })
+
     const response = await this.calendar.events.list({
       calendarId: 'primary',
       timeMin: weekStart.toISOString(),
@@ -49,31 +55,66 @@ export class GoogleCalendarService {
       q: 'source:class_sync', // Filter for our events
     })
 
+    console.log('🔍 [GoogleCalendar] Found events:', response.data.items?.length || 0)
+    console.log('🔍 [GoogleCalendar] Events details:', response.data.items?.map(e => ({
+      id: e.id,
+      summary: e.summary,
+      start: e.start,
+      extendedProperties: e.extendedProperties
+    })))
+
     return response.data.items as CalendarEvent[]
   }
 
   async createEvent(event: CalendarEvent): Promise<string> {
+    console.log('➕ [GoogleCalendar] Creating event:', {
+      summary: event.summary,
+      start: event.start,
+      end: event.end,
+      location: event.location,
+      extendedProperties: event.extendedProperties
+    })
+
     const response = await this.calendar.events.insert({
       calendarId: 'primary',
       requestBody: event,
     })
 
+    console.log('✅ [GoogleCalendar] Event created with ID:', response.data.id)
+    console.log('✅ [GoogleCalendar] Event URL:', response.data.htmlLink)
+
     return response.data.id!
   }
 
   async updateEvent(eventId: string, event: CalendarEvent): Promise<void> {
-    await this.calendar.events.update({
+    console.log('🔄 [GoogleCalendar] Updating event:', {
+      eventId,
+      summary: event.summary,
+      start: event.start,
+      end: event.end,
+      location: event.location,
+      extendedProperties: event.extendedProperties
+    })
+
+    const response = await this.calendar.events.update({
       calendarId: 'primary',
       eventId,
       requestBody: event,
     })
+
+    console.log('✅ [GoogleCalendar] Event updated:', response.data.id)
+    console.log('✅ [GoogleCalendar] Event URL:', response.data.htmlLink)
   }
 
   async deleteEvent(eventId: string): Promise<void> {
+    console.log('🗑️ [GoogleCalendar] Deleting event:', eventId)
+
     await this.calendar.events.delete({
       calendarId: 'primary',
       eventId,
     })
+
+    console.log('✅ [GoogleCalendar] Event deleted:', eventId)
   }
 
   scheduleEventToCalendarEvent(
@@ -81,17 +122,57 @@ export class GoogleCalendarService {
     weekStart: Date,
     courseLinks?: { name: string; url: string }[]
   ): CalendarEvent {
+    console.log('🔄 [GoogleCalendar] Converting schedule event to calendar event:', {
+      courseName: scheduleEvent.courseName,
+      weekday: scheduleEvent.weekday,
+      periodStart: scheduleEvent.periodStart,
+      periodEnd: scheduleEvent.periodEnd,
+      weekStart: weekStart.toISOString()
+    })
+
     const eventDate = new Date(weekStart)
+    console.log('📅 [GoogleCalendar] Date calculation:', {
+      weekStart: weekStart.toISOString(),
+      weekday: scheduleEvent.weekday,
+      calculation: `${weekStart.getDate()} + ${scheduleEvent.weekday} - 1 = ${weekStart.getDate() + scheduleEvent.weekday - 1}`,
+      beforeSetDate: eventDate.toISOString()
+    })
     eventDate.setDate(weekStart.getDate() + scheduleEvent.weekday - 1)
+    console.log('📅 [GoogleCalendar] Final event date:', eventDate.toISOString())
 
     const startTime = this.getPeriodTime(scheduleEvent.periodStart, true)
     const endTime = this.getPeriodTime(scheduleEvent.periodEnd, false)
 
+    // 直接在本地時間創建日期時間，避免時區轉換問題
     const start = new Date(eventDate)
     start.setHours(Math.floor(startTime / 100), startTime % 100, 0, 0)
 
     const end = new Date(eventDate)
     end.setHours(Math.floor(endTime / 100), endTime % 100, 0, 0)
+    
+    // 格式化為 ISO 字串，但手動指定台北時區 +08:00
+    const formatToTaipeiTime = (date: Date): string => {
+      const year = date.getFullYear()
+      const month = String(date.getMonth() + 1).padStart(2, '0')
+      const day = String(date.getDate()).padStart(2, '0')
+      const hours = String(date.getHours()).padStart(2, '0')
+      const minutes = String(date.getMinutes()).padStart(2, '0')
+      const seconds = String(date.getSeconds()).padStart(2, '0')
+      return `${year}-${month}-${day}T${hours}:${minutes}:${seconds}+08:00`
+    }
+    
+    const startDateTime = formatToTaipeiTime(start)
+    const endDateTime = formatToTaipeiTime(end)
+
+    console.log('⏰ [GoogleCalendar] Event timing:', {
+      eventDate: eventDate.toISOString(),
+      startTime: startDateTime,
+      endTime: endDateTime,
+      taipeiTime: {
+        start: `${Math.floor(startTime / 100)}:${String(startTime % 100).padStart(2, '0')}`,
+        end: `${Math.floor(endTime / 100)}:${String(endTime % 100).padStart(2, '0')}`
+      }
+    })
 
     let description = `第 ${scheduleEvent.periodStart}`
     if (scheduleEvent.periodStart !== scheduleEvent.periodEnd) {
@@ -110,14 +191,14 @@ export class GoogleCalendarService {
       description += `\n\n課程連結：${scheduleEvent.url}`
     }
 
-    return {
+    const calendarEvent = {
       summary: scheduleEvent.courseName,
       start: {
-        dateTime: start.toISOString(),
+        dateTime: startDateTime,
         timeZone: 'Asia/Taipei',
       },
       end: {
-        dateTime: end.toISOString(),
+        dateTime: endDateTime,
         timeZone: 'Asia/Taipei',
       },
       // 移除地點欄位的自動輸入，改為空值或字串格式
@@ -135,6 +216,10 @@ export class GoogleCalendarService {
         },
       },
     }
+
+    console.log('📅 [GoogleCalendar] Generated calendar event:', calendarEvent)
+
+    return calendarEvent
   }
 
   private getPeriodTime(period: number, isStart: boolean): number {

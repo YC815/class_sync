@@ -1,0 +1,284 @@
+'use client'
+
+import { useState } from 'react'
+import { Button } from '@/components/ui/button'
+import { Badge } from '@/components/ui/badge'
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog'
+import { Calendar, Plus, Minus, Loader2, ExternalLink, Check, X, AlertCircle } from 'lucide-react'
+import { ScheduleEvent } from '@/lib/types'
+
+interface FloatingSyncButtonProps {
+  onPreview: () => void | Promise<void>
+  onSync: () => Promise<{ syncedEvents: number; deletedEvents: number; message: string }>
+  previewChanges?: {
+    create: ScheduleEvent[]
+    update: ScheduleEvent[]
+    delete: string[]
+  }
+  isLoading?: boolean
+}
+
+export default function FloatingSyncButton({
+  onPreview,
+  onSync,
+  previewChanges,
+  isLoading = false
+}: FloatingSyncButtonProps) {
+  const [showDialog, setShowDialog] = useState(false)
+  const [syncStep, setSyncStep] = useState<'preview' | 'syncing' | 'success' | 'error'>('preview')
+  const [syncError, setSyncError] = useState<string | null>(null)
+  const [syncResult, setSyncResult] = useState<{ syncedEvents: number; deletedEvents: number; message: string } | null>(null)
+
+  const totalChanges = previewChanges 
+    ? previewChanges.create.length + previewChanges.update.length + previewChanges.delete.length
+    : 0
+
+  const handleSyncClick = async () => {
+    if (!previewChanges) {
+      // 如果沒有預覽資料，先預覽
+      await onPreview()
+    }
+    setShowDialog(true)
+    setSyncStep('preview')
+    setSyncError(null)
+  }
+
+  const handleConfirmSync = async () => {
+    setSyncStep('syncing')
+    setSyncError(null)
+    setSyncResult(null)
+    
+    try {
+      const result = await onSync()
+      setSyncResult(result)
+      setSyncStep('success')
+      
+    } catch (error) {
+      setSyncStep('error')
+      setSyncError(error instanceof Error ? error.message : '同步失敗')
+    }
+  }
+
+  const openGoogleCalendar = () => {
+    window.open('https://calendar.google.com', '_blank')
+  }
+
+  return (
+    <>
+      {/* 浮動同步按鈕 - 固定於底部中央，支援 safe-area */}
+      <div className="fixed bottom-6 left-1/2 transform -translate-x-1/2 z-40 pb-safe">
+        <Button 
+          onClick={handleSyncClick}
+          disabled={isLoading}
+          className="gap-2 px-6 py-3 h-12 text-base font-medium shadow-lg hover:shadow-xl transition-all duration-200 bg-blue-600 hover:bg-blue-700 backdrop-blur-sm"
+          size="lg"
+        >
+          {isLoading ? (
+            <>
+              <Loader2 className="w-5 h-5 animate-spin" />
+              同步中...
+            </>
+          ) : (
+            <>
+              <Calendar className="w-5 h-5" />
+              同步 Google Calendar
+            </>
+          )}
+        </Button>
+      </div>
+
+      {/* 同步預覽與確認對話框 */}
+      <Dialog open={showDialog} onOpenChange={setShowDialog}>
+        <DialogContent className="max-w-md">
+          {syncStep === 'preview' && (
+            <>
+              <DialogHeader>
+                <DialogTitle className="flex items-center gap-2">
+                  <Calendar className="w-5 h-5" />
+                  Google Calendar 同步預覽
+                </DialogTitle>
+              </DialogHeader>
+              
+              <div className="space-y-4">
+                {totalChanges === 0 ? (
+                  <Card className="border-gray-200 bg-gray-50">
+                    <CardContent className="p-4 text-center">
+                      <div className="text-muted-foreground">
+                        沒有需要同步的變更
+                      </div>
+                    </CardContent>
+                  </Card>
+                ) : (
+                  <Card>
+                    <CardHeader>
+                      <CardTitle className="text-sm">將會進行以下變更</CardTitle>
+                    </CardHeader>
+                    <CardContent className="space-y-3">
+                      {previewChanges?.create.length > 0 && (
+                        <div className="space-y-2">
+                          <Badge variant="default" className="gap-1">
+                            <Plus className="w-3 h-3" />
+                            新增 {previewChanges.create.length} 個事件
+                          </Badge>
+                          <div className="text-xs space-y-1 ml-2">
+                            {previewChanges.create.slice(0, 3).map((event, index) => (
+                              <div key={index} className="text-muted-foreground">
+                                {event.courseName} - 第{event.periodStart}
+                                {event.periodStart !== event.periodEnd && `-${event.periodEnd}`}節
+                                {event.location && ` (${event.location})`}
+                              </div>
+                            ))}
+                            {previewChanges.create.length > 3 && (
+                              <div className="text-muted-foreground">
+                                ...還有 {previewChanges.create.length - 3} 個事件
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      )}
+
+                      {previewChanges?.update.length > 0 && (
+                        <Badge variant="secondary" className="gap-1">
+                          更新 {previewChanges.update.length} 個事件
+                        </Badge>
+                      )}
+
+                      {previewChanges?.delete.length > 0 && (
+                        <Badge variant="destructive" className="gap-1">
+                          <Minus className="w-3 h-3" />
+                          刪除 {previewChanges.delete.length} 個事件
+                        </Badge>
+                      )}
+                    </CardContent>
+                  </Card>
+                )}
+              </div>
+
+              <DialogFooter className="gap-2">
+                <Button 
+                  variant="outline" 
+                  onClick={() => setShowDialog(false)}
+                >
+                  取消
+                </Button>
+                <Button 
+                  onClick={handleConfirmSync}
+                  disabled={totalChanges === 0}
+                  className="gap-2"
+                >
+                  <Calendar className="w-4 h-4" />
+                  確認同步
+                </Button>
+              </DialogFooter>
+            </>
+          )}
+
+          {syncStep === 'syncing' && (
+            <>
+              <DialogHeader>
+                <DialogTitle className="flex items-center gap-2">
+                  <Loader2 className="w-5 h-5 animate-spin text-blue-600" />
+                  正在同步到 Google Calendar...
+                </DialogTitle>
+              </DialogHeader>
+              
+              <div className="space-y-4">
+                <Card className="border-blue-200 bg-blue-50">
+                  <CardContent className="p-4 text-center">
+                    <div className="text-blue-900">
+                      正在處理 {totalChanges} 個變更...
+                    </div>
+                    <div className="text-sm text-blue-700 mt-2">
+                      請稍候，不要關閉此視窗
+                    </div>
+                  </CardContent>
+                </Card>
+              </div>
+            </>
+          )}
+
+          {syncStep === 'success' && (
+            <>
+              <DialogHeader>
+                <DialogTitle className="flex items-center gap-2 text-green-600">
+                  <Check className="w-5 h-5" />
+                  同步成功！
+                </DialogTitle>
+              </DialogHeader>
+              
+              <div className="space-y-4">
+                <Card className="border-green-200 bg-green-50">
+                  <CardContent className="p-4 text-center">
+                    <div className="text-green-900">
+                      {syncResult?.message || `已成功同步 ${syncResult?.syncedEvents || 0} 個事件到 Google Calendar`}
+                    </div>
+                  </CardContent>
+                </Card>
+                
+                <div className="flex flex-col gap-2">
+                  <Button 
+                    variant="outline" 
+                    onClick={openGoogleCalendar}
+                    className="gap-2"
+                  >
+                    <ExternalLink className="w-4 h-4" />
+                    開啟 Google Calendar
+                  </Button>
+                  <Button 
+                    onClick={() => {
+                      setShowDialog(false)
+                      setSyncStep('preview')
+                    }}
+                    className="gap-2"
+                  >
+                    關閉
+                  </Button>
+                </div>
+              </div>
+            </>
+          )}
+
+          {syncStep === 'error' && (
+            <>
+              <DialogHeader>
+                <DialogTitle className="flex items-center gap-2 text-red-600">
+                  <AlertCircle className="w-5 h-5" />
+                  同步失敗
+                </DialogTitle>
+              </DialogHeader>
+              
+              <div className="space-y-4">
+                <Card className="border-red-200 bg-red-50">
+                  <CardContent className="p-4">
+                    <div className="text-red-900 font-medium mb-2">
+                      同步過程中發生錯誤
+                    </div>
+                    <div className="text-sm text-red-700">
+                      {syncError || '未知錯誤'}
+                    </div>
+                  </CardContent>
+                </Card>
+              </div>
+
+              <DialogFooter className="gap-2">
+                <Button 
+                  variant="outline" 
+                  onClick={() => setShowDialog(false)}
+                >
+                  關閉
+                </Button>
+                <Button 
+                  onClick={handleConfirmSync}
+                  className="gap-2"
+                >
+                  重試
+                </Button>
+              </DialogFooter>
+            </>
+          )}
+        </DialogContent>
+      </Dialog>
+    </>
+  )
+}

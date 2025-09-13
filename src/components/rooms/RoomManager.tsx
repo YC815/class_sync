@@ -27,7 +27,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select'
-import { Plus, Edit, Trash2, MapPin } from 'lucide-react'
+import { Plus, Edit, Trash2, MapPin, Check, X } from 'lucide-react'
 import { Base } from '@/lib/types'
 import { useSession } from 'next-auth/react'
 import { toast } from 'sonner'
@@ -38,6 +38,8 @@ export default function RoomManager() {
   const [isDialogOpen, setIsDialogOpen] = useState(false)
   const [editingBase, setEditingBase] = useState<Base | null>(null)
   const [isLoading, setIsLoading] = useState(false)
+  const [editingRoomId, setEditingRoomId] = useState<string | null>(null)
+  const [editingRoomName, setEditingRoomName] = useState('')
   const [formData, setFormData] = useState({
     name: '',
     address: '',
@@ -177,6 +179,71 @@ export default function RoomManager() {
   const removeRoom = (index: number) => {
     const newRooms = formData.rooms.filter((_, i) => i !== index)
     setFormData({ ...formData, rooms: newRooms })
+  }
+
+  // 開始編輯教室名稱
+  const startEditingRoom = (roomId: string, currentName: string) => {
+    setEditingRoomId(roomId)
+    setEditingRoomName(currentName)
+  }
+
+  // 取消編輯教室名稱
+  const cancelEditingRoom = () => {
+    setEditingRoomId(null)
+    setEditingRoomName('')
+  }
+
+  // 保存教室名稱
+  const saveRoomName = async (roomId: string) => {
+    if (!editingRoomName.trim()) {
+      toast.error('教室名稱不能為空')
+      return
+    }
+
+    try {
+      const response = await fetch(`/api/rooms/${roomId}`, {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          name: editingRoomName.trim()
+        }),
+      })
+
+      if (!response.ok) {
+        throw new Error('Failed to update room name')
+      }
+
+      await loadBases() // 重新載入資料
+      toast.success('教室名稱已更新')
+      setEditingRoomId(null)
+      setEditingRoomName('')
+    } catch (error) {
+      console.error('Failed to update room name:', error)
+      toast.error('更新失敗，請稍後再試')
+    }
+  }
+
+  // 刪除教室
+  const deleteRoom = async (roomId: string, roomName: string) => {
+    if (!confirm(`確定要刪除教室「${roomName}」嗎？`)) return
+
+    try {
+      const response = await fetch(`/api/rooms/${roomId}`, {
+        method: 'DELETE',
+      })
+
+      if (!response.ok) {
+        throw new Error('Failed to delete room')
+      }
+
+      await loadBases()
+      toast.success('教室已刪除')
+    } catch (error) {
+      console.error('Failed to delete room:', error)
+      toast.error('刪除失敗，請稍後再試')
+    }
   }
 
   return (
@@ -416,13 +483,83 @@ export default function RoomManager() {
                         <TableHead className="font-semibold text-foreground">
                           教室名稱
                         </TableHead>
+                        <TableHead className="w-24 font-semibold text-foreground">
+                          操作
+                        </TableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
                       {base.rooms.map((room) => (
                         <TableRow key={room.id} className="hover:bg-muted/30">
                           <TableCell className="font-medium py-3">
-                            {room.name}
+                            {editingRoomId === room.id ? (
+                              <div className="flex items-center gap-2">
+                                <Input
+                                  value={editingRoomName}
+                                  onChange={(e) => setEditingRoomName(e.target.value)}
+                                  onKeyDown={(e) => {
+                                    if (e.key === 'Enter') {
+                                      saveRoomName(room.id)
+                                    } else if (e.key === 'Escape') {
+                                      cancelEditingRoom()
+                                    }
+                                  }}
+                                  className="h-8 text-sm"
+                                  autoFocus
+                                />
+                              </div>
+                            ) : (
+                              <button
+                                onClick={() => startEditingRoom(room.id, room.name)}
+                                className="text-left hover:text-primary transition-colors cursor-text w-full"
+                                title="點擊編輯教室名稱"
+                              >
+                                {room.name}
+                              </button>
+                            )}
+                          </TableCell>
+                          <TableCell>
+                            {editingRoomId === room.id ? (
+                              <div className="flex items-center gap-1">
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  onClick={() => saveRoomName(room.id)}
+                                  className="h-6 w-6 p-0 text-green-600 hover:text-green-700"
+                                >
+                                  <Check className="w-3 h-3" />
+                                </Button>
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  onClick={cancelEditingRoom}
+                                  className="h-6 w-6 p-0 text-red-600 hover:text-red-700"
+                                >
+                                  <X className="w-3 h-3" />
+                                </Button>
+                              </div>
+                            ) : (
+                              <div className="flex items-center gap-1">
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  onClick={() => startEditingRoom(room.id, room.name)}
+                                  className="h-6 w-6 p-0 text-muted-foreground hover:text-primary"
+                                  title="編輯教室名稱"
+                                >
+                                  <Edit className="w-3 h-3" />
+                                </Button>
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  onClick={() => deleteRoom(room.id, room.name)}
+                                  className="h-6 w-6 p-0 text-muted-foreground hover:text-destructive"
+                                  title="刪除教室"
+                                >
+                                  <Trash2 className="w-3 h-3" />
+                                </Button>
+                              </div>
+                            )}
                           </TableCell>
                         </TableRow>
                       ))}

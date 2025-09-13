@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth/next'
 import { authOptions } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
+import { initializeUserDefaults } from '@/lib/user-init'
 
 export async function GET() {
   try {
@@ -12,6 +13,12 @@ export async function GET() {
         { error: 'Unauthorized' },
         { status: 401 }
       )
+    }
+
+    // 為新用戶初始化預設基地和教室
+    const initSuccess = await initializeUserDefaults(session.user.id)
+    if (!initSuccess) {
+      console.error('Failed to initialize user defaults, continuing with empty bases')
     }
 
     const bases = await prisma.base.findMany({
@@ -51,7 +58,7 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    const { name, address, placeId, isSingleRoom, rooms } = await request.json()
+    const { name, address, isSingleRoom, rooms } = await request.json()
 
     if (!name) {
       return NextResponse.json(
@@ -64,7 +71,6 @@ export async function POST(request: NextRequest) {
       data: {
         name,
         address,
-        placeId,
         isSingleRoom: isSingleRoom || false,
         userId: session.user.id,
         rooms: (!isSingleRoom && rooms && rooms.length > 0) ? {

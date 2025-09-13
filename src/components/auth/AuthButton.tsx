@@ -16,11 +16,37 @@ export default function AuthButton() {
   }
 
   if (session) {
+    const userImage = session.user?.image
+    const userName = session.user?.name || '用戶'
+    
+    // 產生首字母頭像背景顏色
+    const getAvatarColor = (name: string) => {
+      const colors = [
+        'bg-red-500', 'bg-blue-500', 'bg-green-500', 'bg-yellow-500',
+        'bg-purple-500', 'bg-pink-500', 'bg-indigo-500', 'bg-teal-500'
+      ]
+      const hash = name.split('').reduce((a, b) => {
+        a = ((a << 5) - a) + b.charCodeAt(0)
+        return a & a
+      }, 0)
+      return colors[Math.abs(hash) % colors.length]
+    }
+    
     return (
       <div className="flex items-center gap-3">
         <div className="flex items-center gap-2">
-          <User className="w-4 h-4" />
-          <span className="text-sm">{session.user?.name}</span>
+          {userImage ? (
+            <img 
+              src={userImage} 
+              alt={userName}
+              className="w-6 h-6 rounded-full"
+            />
+          ) : (
+            <div className={`w-6 h-6 rounded-full flex items-center justify-center text-white text-xs font-medium ${getAvatarColor(userName)}`}>
+              {userName.charAt(0).toUpperCase()}
+            </div>
+          )}
+          <span className="text-sm hidden sm:inline">{userName}</span>
         </div>
         <Button 
           variant="outline" 
@@ -29,7 +55,7 @@ export default function AuthButton() {
           className="gap-2"
         >
           <LogOut className="w-4 h-4" />
-          登出
+          <span className="hidden sm:inline">登出</span>
         </Button>
       </div>
     )

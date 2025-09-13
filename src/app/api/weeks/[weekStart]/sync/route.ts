@@ -15,30 +15,53 @@ export async function POST(
     
     const session = await getServerSession(authOptions)
     if (!session?.user?.id) {
+      console.log('❌ [Sync] Unauthorized: No session or user ID')
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
     const { events, eventsToDelete = [] } = await request.json()
     
     if (!events || !Array.isArray(events)) {
+      console.log('❌ [Sync] Invalid request: Events array is required')
       return NextResponse.json({ error: 'Events array is required' }, { status: 400 })
     }
 
     const weekStart = new Date(weekStartStr)
     const userId = session.user.id
     
-    console.log('Syncing events for week:', weekStartStr, 'userId:', userId)
-    console.log('Events to create/update:', events.length)
-    console.log('Events to delete:', eventsToDelete.length)
+    console.log('🔄 [Sync] Starting sync for week:', weekStartStr, 'userId:', userId)
+    console.log('🔄 [Sync] Events to create/update:', events.length)
+    console.log('🔄 [Sync] Events to delete:', eventsToDelete.length)
+    console.log('🔄 [Sync] Incoming events details:', events.map(e => ({
+      courseName: e.courseName,
+      weekday: e.weekday,
+      periods: `${e.periodStart}-${e.periodEnd}`,
+      location: e.location,
+      courseId: e.courseId
+    })))
 
     // Get access token from session (JWT strategy)
     const accessToken = (session as { accessToken?: string }).accessToken
     
+    console.log('🔑 [Sync] Session details:', {
+      hasSession: !!session,
+      hasUser: !!session?.user,
+      userId: session?.user?.id,
+      sessionKeys: Object.keys(session || {}),
+      hasAccessToken: !!accessToken,
+      tokenLength: accessToken?.length || 0,
+      tokenStart: accessToken?.substring(0, 20) + '...' || 'N/A',
+      fullSession: session
+    })
+    
     if (!accessToken) {
-      return NextResponse.json({ error: 'Google account not connected or token expired' }, { status: 401 })
+      console.log('❌ [Sync] No access token available')
+      console.log('❌ [Sync] Full session object:', JSON.stringify(session, null, 2))
+      return NextResponse.json({ error: 'Google account not connected or token expired. Please sign out and sign in again.' }, { status: 401 })
     }
 
     const calendarService = new GoogleCalendarService(accessToken)
+    console.log('✅ [Sync] Google Calendar service initialized')
     
     // 首先清理該週的所有現有事件，避免干擾
     const existingEvents = await prisma.event.findMany({
@@ -48,7 +71,14 @@ export async function POST(
       }
     })
     
-    console.log('Found existing events for this week:', existingEvents.length)
+    console.log('📋 [Sync] Found existing events for this week:', existingEvents.length)
+    console.log('📋 [Sync] Existing events details:', existingEvents.map(e => ({
+      id: e.id,
+      courseName: e.courseName,
+      weekday: e.weekday,
+      periods: `${e.periodStart}-${e.periodEnd}`,
+      calendarEventId: e.calendarEventId
+    })))
     
     // Delete events that are no longer in the schedule
     for (const eventId of eventsToDelete) {
@@ -99,10 +129,12 @@ export async function POST(
           continue // 跳過無效事件
         }
         
-        console.log('Processing event:', {
+        console.log('🔄 [Sync] Processing event:', {
           weekday: event.weekday,
           periods: `${event.periodStart}-${event.periodEnd}`,
-          course: event.courseName || event.courseId
+          course: event.courseName || event.courseId,
+          location: event.location,
+          courseId: event.courseId
         })
         
         // 從資料庫載入課程連結資訊
@@ -150,14 +182,24 @@ export async function POST(
 
         if (existingEvent?.calendarEventId) {
           // Update existing event
+          console.log('🔄 [Sync] Updating existing event with ID:', existingEvent.calendarEventId)
           await calendarService.updateEvent(existingEvent.calendarEventId, calendarEvent)
           calendarEventId = existingEvent.calendarEventId
+          console.log('✅ [Sync] Event updated successfully')
         } else {
           // Create new event
+          console.log('➕ [Sync] Creating new event')
           calendarEventId = await calendarService.createEvent(calendarEvent)
+          console.log('✅ [Sync] New event created with ID:', calendarEventId)
         }
 
         // Save/update event in database
+        console.log('💾 [Sync] Saving event to database:', {
+          existingEventId: existingEvent?.id,
+          calendarEventId,
+          isUpdate: !!existingEvent
+        })
+        
         const savedEvent = await prisma.event.upsert({
           where: {
             id: existingEvent?.id || 'new-id'
@@ -180,12 +222,26 @@ export async function POST(
           }
         })
 
+        console.log('✅ [Sync] Event saved to database with ID:', savedEvent.id)
         syncedEvents.push(savedEvent)
       } catch (eventError) {
-        console.error(`Failed to sync event:`, eventError)
+        console.error('❌ [Sync] Failed to sync event:', {
+          event: {
+            courseName: event.courseName,
+            weekday: event.weekday,
+            periods: `${event.periodStart}-${event.periodEnd}`
+          },
+          error: eventError
+        })
         // Continue with other events
       }
     }
+
+    console.log('✅ [Sync] Sync completed successfully:', {
+      syncedEvents: syncedEvents.length,
+      deletedEvents: eventsToDelete.length,
+      totalProcessed: events.length
+    })
 
     return NextResponse.json({ 
       success: true,
@@ -194,7 +250,11 @@ export async function POST(
       message: `成功同步 ${syncedEvents.length} 個事件，刪除 ${eventsToDelete.length} 個事件`
     })
   } catch (error) {
-    console.error('Error syncing to calendar:', error)
+    console.error('❌ [Sync] Critical error during sync:', {
+      error: error,
+      stack: error instanceof Error ? error.stack : 'No stack trace',
+      message: error instanceof Error ? error.message : 'Unknown error'
+    })
     return NextResponse.json({ 
       error: '同步失敗，請檢查 Google Calendar 權限後重試' 
     }, { status: 500 })

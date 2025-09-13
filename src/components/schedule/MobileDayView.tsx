@@ -72,38 +72,38 @@ export default function MobileDayView({
   const daySchedule = schedule[selectedDay] || {}
 
   return (
-    <div className="space-y-4 md:hidden">
-      {/* 日期導航 */}
-      <Card>
-        <CardHeader className="pb-3">
-          <div className="flex items-center justify-between">
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={goToPreviousDay}
-            >
-              <ChevronLeft className="w-4 h-4" />
-            </Button>
-            
-            <div className="text-center">
-              <div className="text-lg font-semibold">
-                {WEEKDAYS[selectedDay]}
-              </div>
-              <div className="text-sm text-muted-foreground">
-                {formatDate(getDateForDay(selectedDay))}
-              </div>
+    <div className="space-y-4 md:hidden relative">
+      {/* 浮空藥丸日期導航 */}
+      <div className="sticky top-24 z-40 flex justify-center mb-6">
+        <div className="bg-background/90 backdrop-blur-md border rounded-full shadow-lg p-1 flex items-center gap-1">
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={goToPreviousDay}
+            className="h-8 w-8 rounded-full p-0"
+          >
+            <ChevronLeft className="w-4 h-4" />
+          </Button>
+          
+          <div className="px-4 py-1 text-center min-w-32">
+            <div className="text-sm font-semibold">
+              {WEEKDAYS[selectedDay]}
             </div>
-            
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={goToNextDay}
-            >
-              <ChevronRight className="w-4 h-4" />
-            </Button>
+            <div className="text-xs text-muted-foreground">
+              {formatDate(getDateForDay(selectedDay))}
+            </div>
           </div>
-        </CardHeader>
-      </Card>
+          
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={goToNextDay}
+            className="h-8 w-8 rounded-full p-0"
+          >
+            <ChevronRight className="w-4 h-4" />
+          </Button>
+        </div>
+      </div>
 
       {/* 快速日期選擇 */}
       <Select 
@@ -190,24 +190,101 @@ export default function MobileDayView({
               const daySchedule = schedule[dayIndex] || {}
               const hasClasses = Object.keys(daySchedule).length > 0
               
+              // 檢查半天基地衝突
+              const checkHalfDayConflict = (halfDay: 'morning' | 'afternoon') => {
+                const periods = halfDay === 'morning' ? [1, 2, 3, 4] : [5, 6, 7, 8]
+                const bases = new Set<string>()
+                
+                periods.forEach(period => {
+                  const cell = daySchedule[period]
+                  if (cell?.base && cell.base !== '線上' && cell.base !== '空') {
+                    bases.add(cell.base)
+                  }
+                })
+                
+                return bases.size > 1
+              }
+              
+              // 獲取半天基地顯示
+              const getHalfDayBaseDisplay = (halfDay: 'morning' | 'afternoon') => {
+                const periods = halfDay === 'morning' ? [1, 2, 3, 4] : [5, 6, 7, 8]
+                const bases = new Set<string>()
+                const baseRooms = new Map<string, Set<string>>()
+                
+                periods.forEach(period => {
+                  const cell = daySchedule[period]
+                  if (cell?.base && cell.base !== '線上' && cell.base !== '空') {
+                    bases.add(cell.base)
+                    if (cell.room) {
+                      if (!baseRooms.has(cell.base)) {
+                        baseRooms.set(cell.base, new Set())
+                      }
+                      baseRooms.get(cell.base)!.add(cell.room)
+                    }
+                  }
+                })
+                
+                if (bases.size === 0) return ''
+                if (bases.size === 1) {
+                  const baseName = Array.from(bases)[0]
+                  const rooms = baseRooms.get(baseName)
+                  if (rooms && rooms.size === 1) {
+                    return `${baseName} · ${Array.from(rooms)[0]}`
+                  }
+                  return baseName
+                }
+                
+                return '基地衝突'
+              }
+              
+              const morningConflict = checkHalfDayConflict('morning')
+              const afternoonConflict = checkHalfDayConflict('afternoon')
+              const morningBase = getHalfDayBaseDisplay('morning')
+              const afternoonBase = getHalfDayBaseDisplay('afternoon')
+              
               return (
-                <div key={dayIndex} className="flex items-center justify-between py-1">
-                  <span className="text-sm font-medium w-12">{day}</span>
-                  <div className="flex-1 text-right">
-                    {hasClasses ? (
-                      <div className="text-xs text-muted-foreground">
-                        {Object.entries(daySchedule)
-                          .map(([period, cell]) => 
-                            cell ? `第${period}節: ${cell.courseName}` : null
-                          )
-                          .filter(Boolean)
-                          .join(', ')
-                        }
-                      </div>
-                    ) : (
-                      <span className="text-xs text-muted-foreground">無課程</span>
-                    )}
+                <div key={dayIndex} className="space-y-1">
+                  <div className="flex items-center justify-between py-1">
+                    <span className="text-sm font-medium w-12">{day}</span>
+                    <div className="flex-1 text-right">
+                      {hasClasses ? (
+                        <div className="text-xs text-muted-foreground">
+                          {Object.entries(daySchedule)
+                            .map(([period, cell]) => 
+                              cell ? `第${period}節: ${cell.courseName}` : null
+                            )
+                            .filter(Boolean)
+                            .join(', ')
+                          }
+                        </div>
+                      ) : (
+                        <span className="text-xs text-muted-foreground">無課程</span>
+                      )}
+                    </div>
                   </div>
+                  {/* 基地資訊顯示 */}
+                  {(morningBase || afternoonBase) && (
+                    <div className="flex gap-2 text-xs ml-14">
+                      {morningBase && (
+                        <div className={`px-2 py-1 rounded ${
+                          morningConflict 
+                            ? 'border border-red-500 text-red-700 bg-red-50' 
+                            : 'bg-blue-50 text-blue-700'
+                        }`}>
+                          上午: {morningBase}
+                        </div>
+                      )}
+                      {afternoonBase && (
+                        <div className={`px-2 py-1 rounded ${
+                          afternoonConflict 
+                            ? 'border border-red-500 text-red-700 bg-red-50' 
+                            : 'bg-green-50 text-green-700'
+                        }`}>
+                          下午: {afternoonBase}
+                        </div>
+                      )}
+                    </div>
+                  )}
                 </div>
               )
             })}

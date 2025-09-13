@@ -74,13 +74,14 @@ export default function ScheduleTable({
 
     const course = courses.find(c => c.id === cell.courseId)
     const displayName = cell.courseName || course?.name || '未知課程'
+    const hasLink = Boolean(cell.url || (course?.links && course.links.length > 0))
     
     return (
       <div className="flex items-center gap-1">
-        <span className={`text-xs font-medium ${cell.isContinuation ? 'text-orange-600' : ''}`}>
-          {cell.isContinuation ? `連堂（${displayName}）` : displayName}
+        <span className="text-xs font-medium">
+          {displayName}
         </span>
-        {(cell.url || course?.links?.length) && (
+        {hasLink && (
           <Link className="w-3 h-3 text-blue-500" />
         )}
       </div>
@@ -161,6 +162,41 @@ export default function ScheduleTable({
     })
   }
 
+  // 檢查半天基地衝突（桌機用）
+  const checkHalfDayBaseConflict = (day: number, halfDay: 'morning' | 'afternoon') => {
+    const periods = halfDay === 'morning' ? [1, 2, 3, 4] : [5, 6, 7, 8]
+    const bases = new Set<string>()
+    
+    periods.forEach(period => {
+      const cell = schedule[day]?.[period]
+      if (cell?.base && cell.base !== '線上' && cell.base !== '空') {
+        bases.add(cell.base)
+      }
+    })
+    
+    return bases.size > 1 // 有多於一個實體基地表示衝突
+  }
+
+  // 獲取半天基地顯示文字
+  const getHalfDayBaseDisplay = (day: number, halfDay: 'morning' | 'afternoon') => {
+    const periods = halfDay === 'morning' ? [1, 2, 3, 4] : [5, 6, 7, 8]
+    const bases = new Set<string>()
+    
+    periods.forEach(period => {
+      const cell = schedule[day]?.[period]
+      if (cell?.base && cell.base !== '線上' && cell.base !== '空') {
+        bases.add(cell.base)
+      }
+    })
+    
+    if (bases.size === 0) return ''
+    if (bases.size === 1) {
+      return Array.from(bases)[0]
+    }
+    
+    return '基地衝突'
+  }
+
   return (
     <div className="space-y-4">
       {/* Schedule Table */}
@@ -168,21 +204,55 @@ export default function ScheduleTable({
         <Table className="min-w-[800px]">
           <TableHeader>
             <TableRow>
-              <TableHead className="w-16 text-center">節次</TableHead>
-              <TableHead className="w-20 text-center text-xs">時間</TableHead>
-              {WEEKDAYS.map((day, index) => (
-                <TableHead key={index} className="text-center min-w-32 px-2">
-                  <div className="flex flex-col">
-                    <span>{day}</span>
-                    <span className="text-xs text-muted-foreground font-normal">
-                      {weekdayDates[index]}
-                    </span>
-                  </div>
-                </TableHead>
-              ))}
+              <TableHead className="w-16 text-center align-middle">節次</TableHead>
+              <TableHead className="w-20 text-center text-xs align-middle">時間</TableHead>
+              {WEEKDAYS.map((day, index) => {
+                const dayIndex = index + 1
+                const morningConflict = checkHalfDayBaseConflict(dayIndex, 'morning')
+                const afternoonConflict = checkHalfDayBaseConflict(dayIndex, 'afternoon')
+                
+                return (
+                  <TableHead key={index} className="text-center min-w-32 px-2 align-middle">
+                    <div className="flex flex-col items-center">
+                      <span>{day}</span>
+                      <span className="text-xs text-muted-foreground font-normal">
+                        {weekdayDates[index]}
+                      </span>
+                    </div>
+                  </TableHead>
+                )
+              })}
             </TableRow>
           </TableHeader>
           <TableBody>
+            {/* 上午基地整理行 */}
+            <TableRow className="bg-blue-50/50">
+              <TableCell className="font-medium text-center text-blue-700">
+                上午
+              </TableCell>
+              <TableCell className="text-xs text-blue-600">
+                基地整理
+              </TableCell>
+              {WEEKDAYS.map((_, dayIndex) => {
+                const day = dayIndex + 1
+                const morningBase = getHalfDayBaseDisplay(day, 'morning')
+                const morningConflict = checkHalfDayBaseConflict(day, 'morning')
+                
+                return (
+                  <TableCell key={`morning-base-${dayIndex}`} className="text-center text-xs font-medium">
+                    <div className={`px-2 py-1 rounded ${
+                      morningConflict 
+                        ? 'border border-red-500 text-red-700 bg-red-50' 
+                        : morningBase 
+                          ? 'bg-blue-50 text-blue-700' 
+                          : 'text-gray-400'
+                    }`}>
+                      {morningBase || '無'}
+                    </div>
+                  </TableCell>
+                )
+              })}
+            </TableRow>
             {PERIODS.map(period => (
               <React.Fragment key={period}>
                 <TableRow>
@@ -197,8 +267,8 @@ export default function ScheduleTable({
                     const cell = schedule[day]?.[period]
                     
                     return (
-                      <TableCell key={`${day}-${period}`} className="p-1 sm:p-2">
-                        <div className="space-y-1">
+                      <TableCell key={`${day}-${period}`} className="p-1 sm:p-2 h-20 align-top">
+                        <div className="space-y-1 h-full flex flex-col justify-start">
                           <Select
                             value={cell?.isContinuation ? 'continuation' : (cell?.courseId || (cell?.isTemporary ? 'temp' : 'none'))}
                             onValueChange={(value) => handleCourseSelect(day, period, value)}
@@ -241,74 +311,113 @@ export default function ScheduleTable({
                               <SelectItem value="other">其他...</SelectItem>
                             </SelectContent>
                           </Select>
-                          {cell && (
-                            <>
+                          
+                          {/* 基地選擇 - 只在有課程時顯示，否則保留空間 */}
+                          {cell ? (
+                            <Select
+                              value={(() => {
+                                if (!cell.base) return 'none'
+                                const base = bases.find(b => b.name === cell.base)
+                                return base?.id || 'none'
+                              })()}
+                              onValueChange={(value) => handleBaseSelect(day, period, value)}
+                            >
+                              <SelectTrigger className="w-full h-6 text-xs items-start">
+                                <SelectValue placeholder="選擇基地" />
+                              </SelectTrigger>
+                              <SelectContent>
+                                <SelectItem value="none">無基地</SelectItem>
+                                {bases.map((base) => (
+                                  <SelectItem key={base.id} value={base.id}>
+                                    {base.name}
+                                  </SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
+                          ) : (
+                            <div className="h-6"></div>
+                          )}
+                          
+                          {/* 教室選擇 - 只在有課程且有基地時顯示，否則保留空間 */}
+                          {(() => {
+                            if (!cell || !cell.base) {
+                              // 沒有課程或基地時保留空間但不顯示選擇器
+                              return <div className="h-6"></div>
+                            }
+                            
+                            const base = bases.find(b => b.name === cell.base)
+                            if (!base || base.isSingleRoom || !base.rooms || base.rooms.length === 0) {
+                              // 單一教室基地或沒有教室時保留空間但不顯示選擇器
+                              return <div className="h-6"></div>
+                            }
+                            
+                            return (
                               <Select
-                                value={(() => {
-                                  if (!cell.base) return 'none'
-                                  const base = bases.find(b => b.name === cell.base)
-                                  return base?.id || 'none'
-                                })()}
-                                onValueChange={(value) => handleBaseSelect(day, period, value)}
+                                value={cell.room || 'none'}
+                                onValueChange={(value) => handleRoomSelect(day, period, value)}
                               >
                                 <SelectTrigger className="w-full h-6 text-xs items-start">
-                                  <SelectValue placeholder="選擇基地" />
+                                  <SelectValue placeholder="選擇教室" />
                                 </SelectTrigger>
                                 <SelectContent>
-                                  <SelectItem value="none">無基地</SelectItem>
-                                  {bases.map((base) => (
-                                    <SelectItem key={base.id} value={base.id}>
-                                      {base.name}
+                                  <SelectItem value="none">無教室</SelectItem>
+                                  {base.rooms.map(room => (
+                                    <SelectItem key={room.id} value={room.name}>
+                                      {room.name}
                                     </SelectItem>
                                   ))}
                                 </SelectContent>
                               </Select>
-                              {(() => {
-                                if (!cell.base) return null
-                                const base = bases.find(b => b.name === cell.base)
-                                if (!base || base.isSingleRoom) return null
-                                if (!base.rooms || base.rooms.length === 0) return null
-                                
-                                return (
-                                  <Select
-                                    value={cell.room || 'none'}
-                                    onValueChange={(value) => handleRoomSelect(day, period, value)}
-                                  >
-                                    <SelectTrigger className="w-full h-6 text-xs items-start">
-                                      <SelectValue placeholder="選擇教室" />
-                                    </SelectTrigger>
-                                    <SelectContent>
-                                      <SelectItem value="none">無教室</SelectItem>
-                                      {base.rooms.map(room => (
-                                        <SelectItem key={room.id} value={room.name}>
-                                          {room.name}
-                                        </SelectItem>
-                                      ))}
-                                    </SelectContent>
-                                  </Select>
-                                )
-                              })()}
-                            </>
-                          )}
+                            )
+                          })()}
                         </div>
                       </TableCell>
                     )
                   })}
                 </TableRow>
                 {period === 4 && (
-                  <TableRow className="bg-yellow-50/50">
-                    <TableCell className="font-medium text-center text-yellow-700">
-                      中
-                    </TableCell>
-                    <TableCell className="text-xs text-yellow-600">
-                      11:55-13:25
-                    </TableCell>
-                    {WEEKDAYS.map((_, dayIndex) => (
-                      <TableCell key={`lunch-${dayIndex}`} className="text-center text-yellow-600 text-xs font-medium">
-                        午間休息
+                  <>
+                    <TableRow className="bg-yellow-50/50">
+                      <TableCell className="font-medium text-center text-yellow-700">
+                        中
                       </TableCell>
-                    ))}
-                  </TableRow>
+                      <TableCell className="text-xs text-yellow-600">
+                        11:55-13:25
+                      </TableCell>
+                      {WEEKDAYS.map((_, dayIndex) => (
+                        <TableCell key={`lunch-${dayIndex}`} className="text-center text-yellow-600 text-xs font-medium">
+                          午間休息
+                        </TableCell>
+                      ))}
+                    </TableRow>
+                    <TableRow className="bg-blue-50/50">
+                      <TableCell className="font-medium text-center text-blue-700">
+                        下午
+                      </TableCell>
+                      <TableCell className="text-xs text-blue-600">
+                        基地整理
+                      </TableCell>
+                      {WEEKDAYS.map((_, dayIndex) => {
+                        const day = dayIndex + 1
+                        const afternoonBase = getHalfDayBaseDisplay(day, 'afternoon')
+                        const afternoonConflict = checkHalfDayBaseConflict(day, 'afternoon')
+                        
+                        return (
+                          <TableCell key={`afternoon-base-${dayIndex}`} className="text-center text-xs font-medium">
+                            <div className={`px-2 py-1 rounded ${
+                              afternoonConflict 
+                                ? 'border border-red-500 text-red-700 bg-red-50' 
+                                : afternoonBase 
+                                  ? 'bg-blue-50 text-blue-700' 
+                                  : 'text-gray-400'
+                            }`}>
+                              {afternoonBase || '無'}
+                            </div>
+                          </TableCell>
+                        )
+                      })}
+                    </TableRow>
+                  </>
                 )}
               </React.Fragment>
             ))}

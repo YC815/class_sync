@@ -1,22 +1,28 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef, useCallback } from 'react'
 import { useSession } from 'next-auth/react'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import ScheduleTable from '@/components/schedule/ScheduleTable'
+import ScheduleTableSkeleton from '@/components/schedule/ScheduleTableSkeleton'
 import MobileDayView from '@/components/schedule/MobileDayView'
 import WeekNavigation from '@/components/schedule/WeekNavigation'
-import ScheduleActions from '@/components/schedule/ScheduleActions'
+import FloatingSyncButton from '@/components/schedule/FloatingSyncButton'
 import CourseManager from '@/components/courses/CourseManager'
+import CourseManagerSkeleton from '@/components/courses/CourseManagerSkeleton'
 import RoomManager from '@/components/rooms/RoomManager'
+import RoomManagerSkeleton from '@/components/rooms/RoomManagerSkeleton'
 import AuthButton from '@/components/auth/AuthButton'
 import { WeekSchedule, Course, Base, ScheduleEvent } from '@/lib/types'
 import { getWeekStart, initializeEmptySchedule } from '@/lib/schedule-utils'
+import { useNavbarHeight } from '@/lib/hooks'
 import { toast } from 'sonner'
 
 
 export default function Home() {
   const { data: session, status } = useSession()
+  const navbarRef = useRef<HTMLElement>(null)
+  useNavbarHeight(navbarRef)
   const [currentWeek, setCurrentWeek] = useState<Date | null>(null)
   const [schedule, setSchedule] = useState<WeekSchedule>(initializeEmptySchedule())
   const [courses, setCourses] = useState<Course[]>([])
@@ -28,6 +34,8 @@ export default function Home() {
   }>()
   const [isLoading, setIsLoading] = useState(false)
   const [isLoadingSchedule, setIsLoadingSchedule] = useState(false)
+  const [isLoadingCourses, setIsLoadingCourses] = useState(false)
+  const [isLoadingBases, setIsLoadingBases] = useState(false)
   const [activeTab, setActiveTab] = useState('schedule')
 
   // Initialize currentWeek on client side to avoid hydration mismatch
@@ -44,6 +52,7 @@ export default function Home() {
   }, [session])
 
   const loadCourses = async () => {
+    setIsLoadingCourses(true)
     try {
       const response = await fetch('/api/courses')
       if (response.ok) {
@@ -53,10 +62,13 @@ export default function Home() {
     } catch (error) {
       console.error('Failed to load courses:', error)
       toast.error('載入課程失敗')
+    } finally {
+      setIsLoadingCourses(false)
     }
   }
 
   const loadBases = async () => {
+    setIsLoadingBases(true)
     try {
       const response = await fetch('/api/bases')
       if (response.ok) {
@@ -66,17 +78,12 @@ export default function Home() {
     } catch (error) {
       console.error('Failed to load bases:', error)
       toast.error('載入基地失敗')
+    } finally {
+      setIsLoadingBases(false)
     }
   }
 
-  // Load existing schedule when week changes
-  useEffect(() => {
-    if (currentWeek && session?.user?.id) {
-      loadWeekSchedule(currentWeek)
-    }
-  }, [currentWeek, session])
-
-  const loadWeekSchedule = async (week: Date) => {
+  const loadWeekSchedule = useCallback(async (week: Date) => {
     setIsLoadingSchedule(true)
     try {
       const weekStartStr = week.toISOString().split('T')[0]
@@ -106,97 +113,188 @@ export default function Home() {
     } finally {
       setIsLoadingSchedule(false)
     }
-  }
+  }, [])
+
+  // Load existing schedule when week changes
+  useEffect(() => {
+    if (currentWeek && session?.user?.id) {
+      loadWeekSchedule(currentWeek)
+      // Also sync deleted events from Google Calendar
+      const syncDeleted = async () => {
+        try {
+          const weekStartStr = currentWeek.toISOString().split('T')[0]
+          console.log('🔄 [SyncDeleted] Starting sync for deleted events for week:', weekStartStr)
+          
+          const response = await fetch(`/api/weeks/${weekStartStr}/sync-deleted`, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+            },
+          })
+
+          if (response.ok) {
+            const data = await response.json()
+            console.log('✅ [SyncDeleted] Sync successful:', data)
+            
+            if (data.deletedFromDb > 0) {
+              toast.success(`已清理 ${data.deletedFromDb} 個在 Google Calendar 中已刪除的事件`)
+              // Reload the schedule after cleaning up deleted events
+              loadWeekSchedule(currentWeek)
+            }
+          } else {
+            console.warn('⚠️ [SyncDeleted] Sync response not ok:', response.status)
+            // Don't show error toast for sync deleted events as it's background operation
+          }
+        } catch (error) {
+          console.error('❌ [SyncDeleted] Sync failed:', error)
+          // Don't show error toast for sync deleted events as it's background operation
+        }
+      }
+      syncDeleted()
+    }
+  }, [currentWeek, session, loadWeekSchedule])
 
   const handlePreview = async () => {
-    if (!currentWeek) return
+    if (!currentWeek) {
+      console.log('🚫 [Preview] No current week selected')
+      return
+    }
+    
+    const weekStartStr = currentWeek.toISOString().split('T')[0]
+    console.log('🔍 [Preview] Starting preview for week:', weekStartStr)
+    console.log('🔍 [Preview] Current schedule data:', schedule)
     
     setIsLoading(true)
     try {
-      const weekStartStr = currentWeek.toISOString().split('T')[0]
+      const requestBody = {
+        scheduleData: schedule
+      }
+      console.log('🔍 [Preview] Sending request with body:', requestBody)
       
       const response = await fetch(`/api/weeks/${weekStartStr}/preview`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({
-          scheduleData: schedule
-        }),
+        body: JSON.stringify(requestBody),
       })
 
+      console.log('🔍 [Preview] Response status:', response.status)
+      
       if (!response.ok) {
+        const errorText = await response.text()
+        console.error('🔍 [Preview] Response error:', errorText)
         throw new Error('Preview failed')
       }
 
       const data = await response.json()
+      console.log('🔍 [Preview] Preview response data:', data)
       setPreviewChanges(data.changes)
     } catch (error) {
-      console.error('Preview failed:', error)
+      console.error('❌ [Preview] Preview failed:', error)
       toast.error('預覽失敗，請檢查登入狀態並重試')
     } finally {
       setIsLoading(false)
     }
   }
 
-  const handleSync = async () => {
-    if (!previewChanges || !currentWeek) return
+  const handleSync = async (): Promise<{ syncedEvents: number; deletedEvents: number; message: string }> => {
+    if (!previewChanges || !currentWeek) {
+      console.log('🚫 [Sync] Missing preview changes or current week')
+      throw new Error('Missing preview changes or current week')
+    }
+    
+    const weekStartStr = currentWeek.toISOString().split('T')[0]
+    console.log('🔄 [Sync] Starting sync for week:', weekStartStr)
+    console.log('🔄 [Sync] Preview changes:', {
+      create: previewChanges.create.length,
+      update: previewChanges.update.length,
+      delete: previewChanges.delete.length
+    })
+    console.log('🔄 [Sync] Events to create/update:', previewChanges.create.concat(previewChanges.update))
+    console.log('🔄 [Sync] Events to delete:', previewChanges.delete)
     
     setIsLoading(true)
     try {
-      const weekStartStr = currentWeek.toISOString().split('T')[0]
-      
       // 先保存當前課表資料
+      console.log('💾 [Sync] Saving schedule data first')
       await saveScheduleData(weekStartStr, schedule)
       
       // 然後同步到 Google Calendar
+      const syncRequestBody = {
+        events: previewChanges.create.concat(previewChanges.update),
+        eventsToDelete: previewChanges.delete
+      }
+      
+      console.log('📅 [Sync] Sending sync request to Google Calendar with body:', syncRequestBody)
+      
       const response = await fetch(`/api/weeks/${weekStartStr}/sync`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({
-          events: previewChanges.create.concat(previewChanges.update),
-          eventsToDelete: previewChanges.delete
-        }),
+        body: JSON.stringify(syncRequestBody),
       })
 
+      console.log('📅 [Sync] Sync response status:', response.status)
+      
       if (!response.ok) {
         const errorData = await response.json()
+        console.error('📅 [Sync] Sync error response:', errorData)
         throw new Error(errorData.error || 'Sync failed')
       }
 
       const data = await response.json()
+      console.log('✅ [Sync] Sync successful:', data)
       toast.success(data.message || '同步成功！')
       setPreviewChanges(undefined)
+      
+      return {
+        syncedEvents: data.syncedEvents || 0,
+        deletedEvents: data.deletedEvents || 0,
+        message: data.message || '同步成功！'
+      }
     } catch (error) {
-      console.error('Sync failed:', error)
+      console.error('❌ [Sync] Sync failed:', error)
       const errorMessage = error instanceof Error ? error.message : '未知錯誤'
       toast.error(`同步失敗：${errorMessage}`)
+      throw error
     } finally {
       setIsLoading(false)
     }
   }
 
   const saveScheduleData = async (weekStartStr: string, scheduleData: WeekSchedule) => {
+    console.log('💾 [SaveSchedule] Saving schedule data for week:', weekStartStr)
+    console.log('💾 [SaveSchedule] Schedule data:', scheduleData)
+    
     try {
+      const requestBody = {
+        userId: session?.user?.id,
+        weekStart: weekStartStr,
+        data: scheduleData
+      }
+      
+      console.log('💾 [SaveSchedule] Request body:', requestBody)
+      
       const response = await fetch('/api/weeks', {
         method: 'PATCH',
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({
-          userId: session?.user?.id,
-          weekStart: weekStartStr,
-          data: scheduleData
-        }),
+        body: JSON.stringify(requestBody),
       })
 
+      console.log('💾 [SaveSchedule] Response status:', response.status)
+      
       if (!response.ok) {
-        console.warn('保存課表資料失敗:', response.status)
+        const errorText = await response.text()
+        console.warn('💾 [SaveSchedule] Save failed:', response.status, errorText)
+      } else {
+        console.log('✅ [SaveSchedule] Schedule data saved successfully')
       }
     } catch (error) {
-      console.warn('保存課表資料錯誤:', error)
+      console.warn('❌ [SaveSchedule] Save error:', error)
     }
   }
 
@@ -228,12 +326,12 @@ export default function Home() {
   }
 
   return (
-    <div className="min-h-screen">
-      <nav className="fixed top-0 left-0 right-0 z-50 border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
+    <div className="min-h-screen pb-safe">
+      <nav ref={navbarRef} data-navbar className="fixed top-0 left-0 right-0 z-50 border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60 pt-safe">
         <div className="container mx-auto px-4">
           <div className="flex h-16 items-center justify-between">
-            <div className="flex items-center space-x-8">
-              <h1 className="text-xl font-bold">ClassSync</h1>
+            <div className="flex items-center space-x-4 md:space-x-8">
+              <h1 className="text-lg md:text-xl font-bold">ClassSync</h1>
               
               <Tabs value={activeTab} onValueChange={setActiveTab} className="hidden md:block">
                 <TabsList>
@@ -244,7 +342,7 @@ export default function Home() {
               </Tabs>
             </div>
             
-            <div className="flex items-center space-x-4">
+            <div className="flex items-center space-x-2 md:space-x-4">
               <AuthButton />
             </div>
           </div>
@@ -253,16 +351,19 @@ export default function Home() {
           <div className="md:hidden pb-4">
             <Tabs value={activeTab} onValueChange={setActiveTab}>
               <TabsList className="w-full">
-                <TabsTrigger value="schedule" className="flex-1">週課表</TabsTrigger>
-                <TabsTrigger value="courses" className="flex-1">課程庫</TabsTrigger>
-                <TabsTrigger value="rooms" className="flex-1">教室庫</TabsTrigger>
+                <TabsTrigger value="schedule" className="flex-1 text-xs sm:text-sm">週課表</TabsTrigger>
+                <TabsTrigger value="courses" className="flex-1 text-xs sm:text-sm">課程庫</TabsTrigger>
+                <TabsTrigger value="rooms" className="flex-1 text-xs sm:text-sm">教室庫</TabsTrigger>
               </TabsList>
             </Tabs>
           </div>
         </div>
       </nav>
 
-      <main className="container mx-auto p-4 sm:p-6 pt-20 md:pt-24">
+      <main 
+        className="container mx-auto p-4 sm:p-6 pt-safe" 
+        style={{ paddingTop: 'calc(env(safe-area-inset-top, 0px) + var(--navbar-height, 160px))' }}
+      >
         <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
 
         <TabsContent value="schedule" className="space-y-6">
@@ -274,15 +375,28 @@ export default function Home() {
                   setCurrentWeek(newWeek)
                   setPreviewChanges(undefined) // 清除預覽資料
                 }}
+                onScheduleUpdated={(newSchedule) => {
+                  setSchedule(newSchedule)
+                  setPreviewChanges(undefined) // 清除預覽資料
+                }}
               />
               
-              {isLoadingSchedule ? (
-                <div className="flex items-center justify-center py-12">
-                  <div className="text-center">
-                    <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-gray-900 mx-auto mb-4"></div>
-                    <p className="text-muted-foreground">載入週課表中...</p>
+              {(isLoadingSchedule || isLoadingCourses || isLoadingBases) ? (
+                <>
+                  {/* 桌面版載入骨架 */}
+                  <div className="hidden md:block">
+                    <ScheduleTableSkeleton />
                   </div>
-                </div>
+                  {/* 手機版載入骨架 */}
+                  <div className="md:hidden">
+                    <div className="flex items-center justify-center py-12">
+                      <div className="text-center">
+                        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-gray-900 mx-auto mb-4"></div>
+                        <p className="text-muted-foreground">載入中...</p>
+                      </div>
+                    </div>
+                  </div>
+                </>
               ) : (
                 <>
                   {/* 桌面版週課表 */}
@@ -320,7 +434,7 @@ export default function Home() {
                 </>
               )}
               
-              <ScheduleActions
+              <FloatingSyncButton
                 onPreview={handlePreview}
                 onSync={handleSync}
                 previewChanges={previewChanges}
@@ -331,14 +445,22 @@ export default function Home() {
         </TabsContent>
 
         <TabsContent value="courses" className="space-y-4">
-          <CourseManager 
-            courses={courses}
-            onCoursesChange={setCourses}
-          />
+          {isLoadingCourses ? (
+            <CourseManagerSkeleton />
+          ) : (
+            <CourseManager 
+              courses={courses}
+              onCoursesChange={setCourses}
+            />
+          )}
         </TabsContent>
 
         <TabsContent value="rooms" className="space-y-4">
-          <RoomManager />
+          {isLoadingBases ? (
+            <RoomManagerSkeleton />
+          ) : (
+            <RoomManager />
+          )}
         </TabsContent>
         </Tabs>
       </main>

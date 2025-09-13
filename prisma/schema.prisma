@@ -94,13 +94,13 @@ model Base {
   userId        String   @map("user_id")
   name          String
   address       String?
-  placeId       String?  @map("place_id")
   isSingleRoom  Boolean  @default(false) @map("is_single_room")
   createdAt     DateTime @default(now()) @map("created_at")
   updatedAt     DateTime @updatedAt @map("updated_at")
   
-  user  User   @relation(fields: [userId], references: [id], onDelete: Cascade)
-  rooms Room[]
+  user   User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  rooms  Room[]
+  events Event[]
   
   @@map("bases")
   @@index([userId])
@@ -114,8 +114,9 @@ model Room {
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
   
-  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
-  base Base @relation(fields: [baseId], references: [id], onDelete: Cascade)
+  user   User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  base   Base    @relation(fields: [baseId], references: [id], onDelete: Cascade)
+  events Event[]
   
   @@map("rooms")
   @@index([userId])
@@ -138,23 +139,36 @@ model Week {
 }
 
 model Event {
-  id              String   @id @default(cuid())
-  userId          String   @map("user_id")
-  weekStart       DateTime @map("week_start") @db.Date
-  weekday         Int
-  periodStart     Int      @map("period_start")
-  periodEnd       Int      @map("period_end")
-  courseId        String?  @map("course_id")
-  courseName      String?  @map("course_name")
-  calendarEventId String?  @map("calendar_event_id")
-  seriesId        String?  @map("series_id")
-  createdAt       DateTime @default(now()) @map("created_at")
+  id                String   @id @default(cuid())
+  userId            String   @map("user_id")
+  weekStart         DateTime @map("week_start") @db.Date
+  weekday           Int
+  periodStart       Int      @map("period_start")
+  periodEnd         Int      @map("period_end")
+  courseId          String?  @map("course_id")
+  courseName        String?  @map("course_name")
+  baseId            String?  @map("base_id")
+  roomId            String?  @map("room_id")
+  baseName          String?  @map("base_name")
+  roomName          String?  @map("room_name")
+  address           String?
+  overrideTitle     Boolean  @default(false) @map("override_title")
+  overrideLocation  Boolean  @default(false) @map("override_location")
+  calendarEventId   String?  @map("calendar_event_id")
+  seriesId          String?  @map("series_id")
+  createdAt         DateTime @default(now()) @map("created_at")
+  updatedAt         DateTime @updatedAt @map("updated_at")
   
-  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
-  week Week @relation(fields: [userId, weekStart], references: [userId, weekStart], onDelete: Cascade)
+  user User  @relation(fields: [userId], references: [id], onDelete: Cascade)
+  week Week  @relation(fields: [userId, weekStart], references: [userId, weekStart], onDelete: Cascade)
+  base Base? @relation(fields: [baseId], references: [id], onDelete: SetNull)
+  room Room? @relation(fields: [roomId], references: [id], onDelete: SetNull)
   
   @@map("events")
   @@index([userId, weekStart])
+  @@index([courseId])
+  @@index([baseId])
+  @@index([roomId])
   @@index([calendarEventId])
   @@index([seriesId])
 }

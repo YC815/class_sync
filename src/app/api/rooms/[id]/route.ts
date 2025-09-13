@@ -67,6 +67,40 @@ export async function PATCH(
       }
     })
 
+    // 如果教室名稱或所屬基地有變更，更新相關的 Event 記錄
+    if (name !== existingRoom.name || (baseId && baseId !== existingRoom.baseId)) {
+      const currentWeek = new Date()
+      currentWeek.setHours(0, 0, 0, 0)
+      
+      // 計算本週的週一
+      const dayOfWeek = currentWeek.getDay()
+      const monday = new Date(currentWeek)
+      monday.setDate(currentWeek.getDate() - (dayOfWeek === 0 ? 6 : dayOfWeek - 1))
+      
+      // 需要獲取基地資訊以更新 baseName 和 address
+      const base = room.base
+      
+      // 更新當週及未來的 Events（只更新 overrideLocation = false 的事件）
+      const updateResult = await prisma.event.updateMany({
+        where: {
+          roomId: resolvedParams.id,
+          userId: session.user.id,
+          weekStart: {
+            gte: monday
+          },
+          overrideLocation: false
+        },
+        data: {
+          roomName: name,
+          baseName: base.name,
+          address: base.address,
+          ...(baseId && baseId !== existingRoom.baseId && { baseId })
+        }
+      })
+      
+      console.log(`Updated ${updateResult.count} events for room change: "${existingRoom.name}" -> "${name}"`)
+    }
+
     return NextResponse.json(room)
   } catch (error) {
     console.error('Error updating room:', error)
