@@ -1,6 +1,10 @@
 import { google } from 'googleapis'
 import { ScheduleEvent } from './types'
 
+function formatDateLocal(date: Date): string {
+  return date.toLocaleDateString('en-CA', { timeZone: 'Asia/Taipei' })
+}
+
 export interface CalendarEvent {
   id?: string
   summary: string
@@ -38,7 +42,8 @@ export class GoogleCalendarService {
 
   async listEvents(weekStart: Date): Promise<CalendarEvent[]> {
     const weekEnd = new Date(weekStart)
-    weekEnd.setDate(weekStart.getDate() + 6)
+    // Include Sunday events by setting timeMax to next Monday 00:00
+    weekEnd.setDate(weekStart.getDate() + 7)
 
     console.log('🔍 [GoogleCalendar] Listing events:', {
       weekStart: weekStart.toISOString(),
@@ -219,7 +224,7 @@ export class GoogleCalendarService {
       extendedProperties: {
         private: {
           source: 'class_sync',
-          weekStart: weekStart.toISOString().split('T')[0],
+          weekStart: formatDateLocal(weekStart),
           weekday: scheduleEvent.weekday.toString(),
           periodStart: scheduleEvent.periodStart.toString(),
           periodEnd: scheduleEvent.periodEnd.toString(),

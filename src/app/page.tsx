@@ -31,6 +31,11 @@ import { useNavbarHeight } from '@/lib/hooks'
 import { toast } from 'sonner'
 
 
+function formatDateLocal(date: Date): string {
+  return date.toLocaleDateString('en-CA', { timeZone: 'Asia/Taipei' })
+}
+
+
 export default function Home() {
   const { data: session, status } = useSession()
   const navbarRef = useRef<HTMLElement>(null)
@@ -101,7 +106,7 @@ export default function Home() {
   const loadWeekSchedule = useCallback(async (week: Date) => {
     setIsLoadingSchedule(true)
     try {
-      const weekStartStr = week.toISOString().split('T')[0]
+      const weekStartStr = formatDateLocal(week)
       const response = await fetch(`/api/weeks/${weekStartStr}`)
       
       if (response.ok) {
@@ -143,7 +148,7 @@ export default function Home() {
 
   const syncDeletedEvents = useCallback(async (week: Date) => {
     try {
-      const weekStartStr = week.toISOString().split('T')[0]
+      const weekStartStr = formatDateLocal(week)
       console.log('🔄 [SyncDeleted] Starting sync for deleted events for week:', weekStartStr)
       
       const response = await fetch(`/api/weeks/${weekStartStr}/sync-deleted`, {
@@ -194,7 +199,7 @@ export default function Home() {
       return
     }
     
-    const weekStartStr = currentWeek.toISOString().split('T')[0]
+    const weekStartStr = formatDateLocal(currentWeek)
     console.log('🔍 [Preview] Starting preview for week:', weekStartStr)
     console.log('🔍 [Preview] Current schedule data:', schedule)
     
@@ -214,7 +219,13 @@ export default function Home() {
       })
 
       console.log('🔍 [Preview] Response status:', response.status)
-      
+
+      if (response.status === 401) {
+        toast.error('登入逾期，請重新登入')
+        await signOut()
+        return
+      }
+
       if (!response.ok) {
         const errorText = await response.text()
         console.error('🔍 [Preview] Response error:', errorText)
@@ -238,7 +249,7 @@ export default function Home() {
       throw new Error('Missing preview changes or current week')
     }
     
-    const weekStartStr = currentWeek.toISOString().split('T')[0]
+    const weekStartStr = formatDateLocal(currentWeek)
     console.log('🔄 [Sync] Starting sync for week:', weekStartStr)
     console.log('🔄 [Sync] Preview changes:', {
       create: previewChanges.create.length,
@@ -271,7 +282,15 @@ export default function Home() {
       })
 
       console.log('📅 [Sync] Sync response status:', response.status)
-      
+
+      if (response.status === 401) {
+        const errorData = await response.json().catch(() => ({}))
+        console.error('📅 [Sync] Unauthorized:', errorData)
+        toast.error('登入逾期，請重新登入')
+        await signOut()
+        throw new Error(errorData.error || 'Unauthorized')
+      }
+
       if (!response.ok) {
         const errorData = await response.json()
         console.error('📅 [Sync] Sync error response:', errorData)
@@ -533,6 +552,7 @@ export default function Home() {
                       bases={bases}
                       onScheduleChange={(newSchedule) => {
                         setSchedule(newSchedule)
+                        setPreviewChanges(undefined)
                         // Auto-detect weekends when schedule changes
                         const hasSaturday = hasSaturdayCourses(newSchedule)
                         const hasSunday = hasSundayCourses(newSchedule)
@@ -540,7 +560,7 @@ export default function Home() {
                         setShowSunday(hasSunday)
                         // 自動保存課表變更 (debounced)
                         if (currentWeek) {
-                          const weekStartStr = currentWeek.toISOString().split('T')[0]
+                          const weekStartStr = formatDateLocal(currentWeek)
                           setTimeout(() => saveScheduleData(weekStartStr, newSchedule), 1000)
                         }
                       }}
@@ -558,6 +578,7 @@ export default function Home() {
                     courses={courses}
                     onScheduleChange={(newSchedule) => {
                       setSchedule(newSchedule)
+                      setPreviewChanges(undefined)
                       // Auto-detect weekends when schedule changes
                       const hasSaturday = hasSaturdayCourses(newSchedule)
                       const hasSunday = hasSundayCourses(newSchedule)
@@ -565,7 +586,7 @@ export default function Home() {
                       setShowSunday(hasSunday)
                       // 自動保存課表變更 (debounced)
                       if (currentWeek) {
-                        const weekStartStr = currentWeek.toISOString().split('T')[0]
+                        const weekStartStr = formatDateLocal(currentWeek)
                         setTimeout(() => saveScheduleData(weekStartStr, newSchedule), 1000)
                       }
                     }}
