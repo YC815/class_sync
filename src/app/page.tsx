@@ -533,6 +533,7 @@ export default function Home() {
                       bases={bases}
                       onScheduleChange={(newSchedule) => {
                         setSchedule(newSchedule)
+                        setPreviewChanges(undefined)
                         // Auto-detect weekends when schedule changes
                         const hasSaturday = hasSaturdayCourses(newSchedule)
                         const hasSunday = hasSundayCourses(newSchedule)
@@ -558,6 +559,7 @@ export default function Home() {
                     courses={courses}
                     onScheduleChange={(newSchedule) => {
                       setSchedule(newSchedule)
+                      setPreviewChanges(undefined)
                       // Auto-detect weekends when schedule changes
                       const hasSaturday = hasSaturdayCourses(newSchedule)
                       const hasSunday = hasSundayCourses(newSchedule)
