@@ -38,7 +38,8 @@ export class GoogleCalendarService {
 
   async listEvents(weekStart: Date): Promise<CalendarEvent[]> {
     const weekEnd = new Date(weekStart)
-    weekEnd.setDate(weekStart.getDate() + 6)
+    // Include Sunday events by setting timeMax to next Monday 00:00
+    weekEnd.setDate(weekStart.getDate() + 7)
 
     console.log('🔍 [GoogleCalendar] Listing events:', {
       weekStart: weekStart.toISOString(),
