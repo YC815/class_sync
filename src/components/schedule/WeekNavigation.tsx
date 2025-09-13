@@ -2,7 +2,7 @@
 
 import { Button } from '@/components/ui/button'
 import { ChevronLeft, ChevronRight, Copy } from 'lucide-react'
-import { formatDateRange } from '@/lib/schedule-utils'
+import { formatDateRange, getWeekStart } from '@/lib/schedule-utils'
 import { toast } from 'sonner'
 import { useState } from 'react'
 
@@ -26,15 +26,13 @@ export default function WeekNavigation({
   const getWeekIndicator = () => {
     const today = new Date()
     const currentWeekStart = new Date(currentWeek)
-    const thisWeekStart = new Date(today)
-    thisWeekStart.setDate(today.getDate() - today.getDay() + 1) // Monday of this week
-    thisWeekStart.setHours(0, 0, 0, 0)
-    
+    currentWeekStart.setHours(0, 0, 0, 0)
+
+    // Use the same logic as getWeekStart to ensure consistency
+    const thisWeekStart = getWeekStart(today)
     const nextWeekStart = new Date(thisWeekStart)
     nextWeekStart.setDate(thisWeekStart.getDate() + 7)
-    
-    currentWeekStart.setHours(0, 0, 0, 0)
-    
+
     if (currentWeekStart.getTime() === thisWeekStart.getTime()) {
       return '本週'
     } else if (currentWeekStart.getTime() === nextWeekStart.getTime()) {
@@ -61,21 +59,15 @@ export default function WeekNavigation({
   const goToAbsoluteNextWeek = () => {
     // 絕對下週：從今天計算的下週，不是相對當前顯示週的下一週
     const today = new Date()
-    const nextWeekStart = new Date(today)
-    const day = today.getDay()
-    const diff = today.getDate() - day + (day === 0 ? -6 : 1) + 7 // +7 天到下週
-    nextWeekStart.setDate(diff)
-    nextWeekStart.setHours(0, 0, 0, 0)
+    const thisWeekStart = getWeekStart(today)
+    const nextWeekStart = new Date(thisWeekStart)
+    nextWeekStart.setDate(thisWeekStart.getDate() + 7)
     onWeekChange(nextWeekStart)
   }
 
   const goToThisWeek = () => {
     const today = new Date()
-    const thisWeekStart = new Date(today)
-    const day = today.getDay()
-    const diff = today.getDate() - day + (day === 0 ? -6 : 1)
-    thisWeekStart.setDate(diff)
-    thisWeekStart.setHours(0, 0, 0, 0)
+    const thisWeekStart = getWeekStart(today)
     onWeekChange(thisWeekStart)
   }
 
@@ -147,17 +139,19 @@ export default function WeekNavigation({
 
       {/* 本週、下週和複製上週按鈕在日期下方 */}
       <div className="flex items-center gap-2">
-        <Button 
-          variant="outline" 
+        <Button
+          variant="outline"
           size="sm"
           onClick={goToThisWeek}
+          className={weekIndicator === '本週' ? 'bg-green-50 border-green-300 text-green-700 hover:bg-green-100' : ''}
         >
           本週
         </Button>
-        <Button 
-          variant="outline" 
+        <Button
+          variant="outline"
           size="sm"
           onClick={goToAbsoluteNextWeek}
+          className={weekIndicator === '下週' ? 'bg-blue-50 border-blue-300 text-blue-700 hover:bg-blue-100' : ''}
         >
           下週
         </Button>

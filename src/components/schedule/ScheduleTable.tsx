@@ -123,7 +123,9 @@ export default function ScheduleTable({
       if (previousCell) {
         updateCell(day, period, {
           ...previousCell,
-          isContinuation: true
+          isContinuation: true,
+          isSynced: false, // 連堂課程也標記為未同步
+          calendarEventId: undefined
         })
       }
       return
@@ -136,7 +138,9 @@ export default function ScheduleTable({
         courseName: course.name,
         url: course.links?.[0]?.url,
         base: undefined, // 重設基地選擇
-        room: undefined  // 重設教室選擇
+        room: undefined, // 重設教室選擇
+        isSynced: false, // 新選擇的課程標記為未同步
+        calendarEventId: undefined
       })
 
       // 如果是奇數節次且下一節是連堂，清除下一節
@@ -160,7 +164,9 @@ export default function ScheduleTable({
       base: baseId === 'none' ? undefined : base?.name,
       room: undefined, // 重設教室選擇
       placeId: baseId === 'none' ? undefined : base?.placeId,
-      address: baseId === 'none' ? undefined : base?.address
+      address: baseId === 'none' ? undefined : base?.address,
+      isSynced: false, // 基地變更標記為未同步
+      calendarEventId: undefined
     })
 
     // 如果是奇數節次且下一節是連堂，清除下一節
@@ -178,7 +184,9 @@ export default function ScheduleTable({
 
     updateCell(day, period, {
       ...currentCell,
-      room: room === 'none' ? undefined : room
+      room: room === 'none' ? undefined : room,
+      isSynced: false, // 教室變更標記為未同步
+      calendarEventId: undefined
     })
 
     // 如果是奇數節次且下一節是連堂，清除下一節
@@ -197,7 +205,9 @@ export default function ScheduleTable({
       courseName,
       isTemporary: true,
       base: undefined,
-      room: undefined
+      room: undefined,
+      isSynced: false, // 臨時課程標記為未同步
+      calendarEventId: undefined
     })
 
     // 如果是奇數節次且下一節是連堂，清除下一節
@@ -246,6 +256,23 @@ export default function ScheduleTable({
 
   return (
     <div className="space-y-4">
+      {/* 同步狀態圖例 */}
+      <div className="flex items-center gap-4 p-3 bg-gray-50 rounded-lg text-sm">
+        <span className="font-medium text-gray-700">同步狀態：</span>
+        <div className="flex items-center gap-2">
+          <div className="w-4 h-4 bg-green-100 border-l-4 border-green-400 rounded-sm"></div>
+          <span className="text-green-700">已同步至 Google Calendar</span>
+        </div>
+        <div className="flex items-center gap-2">
+          <div className="w-4 h-4 bg-yellow-100 border-l-4 border-yellow-400 rounded-sm border-dashed border-r border-t border-b"></div>
+          <span className="text-yellow-700">本地編輯，尚未同步</span>
+        </div>
+        <div className="flex items-center gap-2">
+          <div className="w-4 h-4 bg-white border border-gray-300 border-dashed rounded-sm"></div>
+          <span className="text-gray-600">空白時段</span>
+        </div>
+      </div>
+
       {/* Schedule Table */}
       <div className="border rounded-lg overflow-auto">
         <Table className="min-w-[800px]">
@@ -254,7 +281,6 @@ export default function ScheduleTable({
               <TableHead className="w-16 text-center align-middle">節次</TableHead>
               <TableHead className="w-20 text-center text-xs align-middle">時間</TableHead>
               {currentWeekdays.map((day, index) => {
-                const dayIndex = index + 1
                 const isWeekend = index >= 5 // 週六日
 
                 return (
@@ -321,13 +347,25 @@ export default function ScheduleTable({
                     return (
                       <TableCell key={`${day}-${period}`} className={`p-1 sm:p-2 h-20 align-top ${
                         isWeekend ? 'bg-gray-50' : ''
+                      } ${
+                        cell?.isSynced
+                          ? 'bg-green-50 border-l-4 border-green-400'
+                          : cell
+                            ? 'bg-yellow-50 border-l-4 border-yellow-400'
+                            : ''
                       }`}>
                         <div className="space-y-1 h-full flex flex-col justify-start">
                           <Select
                             value={cell?.isContinuation ? 'continuation' : (cell?.courseId || (cell?.isTemporary ? 'temp' : 'none'))}
                             onValueChange={(value) => handleCourseSelect(day, period, value)}
                           >
-                            <SelectTrigger className="w-full h-auto min-h-8 border-dashed text-xs items-start">
+                            <SelectTrigger className={`w-full h-auto min-h-8 text-xs items-start ${
+                              cell?.isSynced
+                                ? 'border-green-300 bg-green-25'
+                                : cell
+                                  ? 'border-yellow-300 bg-yellow-25 border-dashed'
+                                  : 'border-dashed'
+                            }`}>
                               <SelectValue>
                                 {cell ? getCellContent(day, period) : (
                                   <span className="text-muted-foreground text-xs">選擇課程</span>

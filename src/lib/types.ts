@@ -52,6 +52,8 @@ export interface ScheduleCell {
   room?: string // 教室：根據基地顯示對應列表
   placeId?: string // Google Places API Place ID
   address?: string // 基地地址
+  isSynced?: boolean // 是否已同步到 Google Calendar
+  calendarEventId?: string // Google Calendar 事件 ID
 }
 
 export interface WeekSchedule {

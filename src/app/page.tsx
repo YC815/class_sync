@@ -14,7 +14,7 @@ import CourseManagerSkeleton from '@/components/courses/CourseManagerSkeleton'
 import RoomManager from '@/components/rooms/RoomManager'
 import RoomManagerSkeleton from '@/components/rooms/RoomManagerSkeleton'
 import UserAccountDropdown from '@/components/auth/UserAccountDropdown'
-import { WeekSchedule, Course, Base, ScheduleEvent } from '@/lib/types'
+import { WeekSchedule, Course, Base, ScheduleEvent, ScheduleCell } from '@/lib/types'
 import { getWeekStart, initializeEmptyScheduleWithWeekends } from '@/lib/schedule-utils'
 import { useNavbarHeight } from '@/lib/hooks'
 import { toast } from 'sonner'
@@ -47,6 +47,8 @@ export default function Home() {
   const [isResetting, setIsResetting] = useState(false)
   const [syncError, setSyncError] = useState<string | null>(null)
   const [showSyncErrorToast, setShowSyncErrorToast] = useState(false)
+  const [pendingChanges, setPendingChanges] = useState<WeekSchedule | null>(null)
+  const [isPreventingReload, setIsPreventingReload] = useState(false)
 
   // Initialize currentWeek on client side to avoid hydration mismatch
   useEffect(() => {
@@ -95,7 +97,21 @@ export default function Home() {
     }
   }
 
-  const loadWeekSchedule = useCallback(async (week: Date, skipSyncDeleted = false) => {
+  const loadWeekScheduleRef = useRef<(week: Date, skipSyncDeleted?: boolean, preserveLocalChanges?: boolean) => Promise<void>>()
+
+  loadWeekScheduleRef.current = async (week: Date, skipSyncDeleted = false, preserveLocalChanges = false) => {
+    // 如果有待處理的變更，則跳過載入以保護用戶輸入
+    if (preserveLocalChanges && pendingChanges) {
+      console.log('⏸️ [LoadSchedule] 跳過載入以保留本地變更')
+      return
+    }
+
+    // 如果正在防止重載，也跳過載入
+    if (isPreventingReload) {
+      console.log('⏸️ [LoadSchedule] 正在防止重載，跳過載入')
+      return
+    }
+
     setIsLoadingSchedule(true)
     setSyncError(null)
 
@@ -125,10 +141,48 @@ export default function Home() {
           Object.keys(data.schedule).forEach(day => {
             const dayNum = parseInt(day)
             if (dayNum >= 1 && dayNum <= 7) {
-              fullSchedule[dayNum] = data.schedule[dayNum] || {}
+              const daySchedule: { [period: number]: ScheduleCell | null } = {}
+              Object.keys(data.schedule[dayNum] || {}).forEach(period => {
+                const periodNum = parseInt(period)
+                const cell = data.schedule[dayNum][periodNum]
+                if (cell) {
+                  // 從服務器載入的數據標記為已同步
+                  daySchedule[periodNum] = {
+                    ...cell,
+                    isSynced: true,
+                    calendarEventId: cell.calendarEventId
+                  }
+                }
+              })
+              fullSchedule[dayNum] = daySchedule
             }
           })
-          setSchedule(fullSchedule)
+
+          // 合併邏輯：保留本地未同步項目，服務器已同步項目優先
+          const currentSchedule = schedule
+          const mergedSchedule = { ...fullSchedule }
+
+          // 遍歷現有課表，保留未同步項目
+          Object.keys(currentSchedule).forEach(day => {
+            const dayNum = parseInt(day)
+            if (dayNum >= 1 && dayNum <= 7) {
+              Object.keys(currentSchedule[dayNum] || {}).forEach(period => {
+                const periodNum = parseInt(period)
+                const currentCell = currentSchedule[dayNum]?.[periodNum]
+                const serverCell = fullSchedule[dayNum]?.[periodNum]
+
+                if (currentCell && !currentCell.isSynced && !serverCell) {
+                  // 保留未同步的本地項目
+                  if (!mergedSchedule[dayNum]) mergedSchedule[dayNum] = {}
+                  mergedSchedule[dayNum][periodNum] = currentCell
+                }
+                // 服務器有同步項目時，優先使用服務器項目（已在上面設置）
+              })
+            }
+          })
+
+          setSchedule(mergedSchedule)
+
           console.log(`載入 ${weekStartStr} 週課表:`, data.totalEvents || Object.keys(data.schedule).length, '個時段')
 
           // 顯示恢復結果通知
@@ -167,6 +221,10 @@ export default function Home() {
     } finally {
       setIsLoadingSchedule(false)
     }
+  }
+
+  const loadWeekSchedule = useCallback(async (week: Date, skipSyncDeleted = false, preserveLocalChanges = false) => {
+    return loadWeekScheduleRef.current?.(week, skipSyncDeleted, preserveLocalChanges)
   }, [])
 
   // Manual recovery function for Google Calendar events
@@ -183,8 +241,8 @@ export default function Home() {
         const data = await response.json()
         if (data.recoveredEvents > 0 || data.linkedEvents > 0) {
           toast.success(data.message)
-          // Reload the schedule to show recovered events
-          await loadWeekSchedule(week, true) // Skip sync-deleted to avoid conflicts
+          // Reload the schedule to show recovered events, but preserve local changes
+          await loadWeekSchedule(week, true, true) // Skip sync-deleted and preserve local changes
         } else {
           toast.info(data.message)
         }
@@ -213,7 +271,7 @@ export default function Home() {
     if (currentWeek && session?.user?.id) {
       loadWeekSchedule(currentWeek)
     }
-  }, [currentWeek, session, loadWeekSchedule])
+  }, [currentWeek, session?.user?.id, loadWeekSchedule])
 
   // 顯示同步錯誤的持久性 toast
   useEffect(() => {
@@ -227,7 +285,7 @@ export default function Home() {
               onClick={() => {
                 if (!currentWeek) return
                 setIsLoading(true)
-                loadWeekSchedule(currentWeek, false)
+                loadWeekSchedule(currentWeek, false, true) // 保留本地變更
                   .then(() => {
                     toast.success('重新同步完成')
                     setShowSyncErrorToast(false)
@@ -377,7 +435,31 @@ export default function Home() {
       console.log('✅ [Sync] Sync successful:', data)
       toast.success(data.message || '同步成功！')
       setPreviewChanges(undefined)
-      
+
+      // 同步成功後，將所有項目標記為已同步
+      const updatedSchedule = { ...schedule }
+      Object.keys(updatedSchedule).forEach(day => {
+        const dayNum = parseInt(day)
+        if (dayNum >= 1 && dayNum <= 7) {
+          Object.keys(updatedSchedule[dayNum] || {}).forEach(period => {
+            const periodNum = parseInt(period)
+            const cell = updatedSchedule[dayNum]?.[periodNum]
+            if (cell) {
+              updatedSchedule[dayNum][periodNum] = {
+                ...cell,
+                isSynced: true
+                // calendarEventId 將在下次載入時從服務器更新
+              }
+            }
+          })
+        }
+      })
+      setSchedule(updatedSchedule)
+
+      // 同步成功後清除待處理變更，避免重新載入
+      setPendingChanges(null)
+      setIsPreventingReload(false)
+
       return {
         syncedEvents: data.syncedEvents || 0,
         deletedEvents: data.deletedEvents || 0,
@@ -393,19 +475,19 @@ export default function Home() {
     }
   }
 
-  const saveScheduleData = async (weekStartStr: string, scheduleData: WeekSchedule) => {
+  const saveScheduleData = async (weekStartStr: string, scheduleData: WeekSchedule): Promise<void> => {
     console.log('💾 [SaveSchedule] Saving schedule data for week:', weekStartStr)
     console.log('💾 [SaveSchedule] Schedule data:', scheduleData)
-    
+
     try {
       const requestBody = {
         userId: session?.user?.id,
         weekStart: weekStartStr,
         data: scheduleData
       }
-      
+
       console.log('💾 [SaveSchedule] Request body:', requestBody)
-      
+
       const response = await fetch('/api/weeks', {
         method: 'PATCH',
         headers: {
@@ -415,15 +497,17 @@ export default function Home() {
       })
 
       console.log('💾 [SaveSchedule] Response status:', response.status)
-      
+
       if (!response.ok) {
         const errorText = await response.text()
         console.warn('💾 [SaveSchedule] Save failed:', response.status, errorText)
+        throw new Error(`Save failed: ${response.status}`)
       } else {
         console.log('✅ [SaveSchedule] Schedule data saved successfully')
       }
     } catch (error) {
       console.warn('❌ [SaveSchedule] Save error:', error)
+      throw error
     }
   }
 
@@ -593,10 +677,23 @@ export default function Home() {
                       onScheduleChange={(newSchedule) => {
                         setSchedule(newSchedule)
                         setPreviewChanges(undefined)
+                        // 標記有待處理的變更
+                        setPendingChanges(newSchedule)
+                        setIsPreventingReload(true)
+
                         // 自動保存課表變更 (debounced)
                         if (currentWeek) {
                           const weekStartStr = formatDateLocal(currentWeek)
-                          setTimeout(() => saveScheduleData(weekStartStr, newSchedule), 1000)
+                          setTimeout(() => {
+                            saveScheduleData(weekStartStr, newSchedule).then(() => {
+                              // 保存完成後清除防止重載標記
+                              setPendingChanges(null)
+                              setIsPreventingReload(false)
+                            }).catch(() => {
+                              // 保存失敗時保持標記
+                              console.warn('保存失敗，保持本地變更')
+                            })
+                          }, 1000)
                         }
                       }}
                       currentWeek={currentWeek}
@@ -610,10 +707,23 @@ export default function Home() {
                     onScheduleChange={(newSchedule) => {
                       setSchedule(newSchedule)
                       setPreviewChanges(undefined)
+                      // 標記有待處理的變更
+                      setPendingChanges(newSchedule)
+                      setIsPreventingReload(true)
+
                       // 自動保存課表變更 (debounced)
                       if (currentWeek) {
                         const weekStartStr = formatDateLocal(currentWeek)
-                        setTimeout(() => saveScheduleData(weekStartStr, newSchedule), 1000)
+                        setTimeout(() => {
+                          saveScheduleData(weekStartStr, newSchedule).then(() => {
+                            // 保存完成後清除防止重載標記
+                            setPendingChanges(null)
+                            setIsPreventingReload(false)
+                          }).catch(() => {
+                            // 保存失敗時保持標記
+                            console.warn('保存失敗，保持本地變更')
+                          })
+                        }, 1000)
                       }
                     }}
                     currentWeek={currentWeek}
