@@ -186,9 +186,14 @@ export async function POST(
           await calendarService.updateEvent(existingEvent.calendarEventId, calendarEvent)
           calendarEventId = existingEvent.calendarEventId
           console.log('✅ [Sync] Event updated successfully')
+        } else if (existingEvent && !existingEvent.calendarEventId) {
+          // Existing event in DB but no Calendar ID - create new calendar event and update DB
+          console.log('➕ [Sync] Creating calendar event for existing DB record')
+          calendarEventId = await calendarService.createEvent(calendarEvent)
+          console.log('✅ [Sync] New calendar event created with ID:', calendarEventId)
         } else {
-          // Create new event
-          console.log('➕ [Sync] Creating new event')
+          // Completely new event
+          console.log('➕ [Sync] Creating completely new event')
           calendarEventId = await calendarService.createEvent(calendarEvent)
           console.log('✅ [Sync] New event created with ID:', calendarEventId)
         }

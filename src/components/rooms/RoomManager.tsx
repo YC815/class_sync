@@ -317,7 +317,7 @@ export default function RoomManager() {
                   </SelectContent>
                 </Select>
                 <p className="text-xs text-muted-foreground">
-                  單教室基地不需要填寫教室列表，選擇課程時也不會出現教室選項
+                  單教室基地：選擇課程時不會出現教室選項
                 </p>
               </div>
               
@@ -473,7 +473,7 @@ export default function RoomManager() {
             <CardContent>
               {base.isSingleRoom ? (
                 <div className="text-sm text-muted-foreground italic">
-                  單教室基地，無需設定教室列表
+                  此基地為單一教室配置
                 </div>
               ) : base.rooms && base.rooms.length > 0 ? (
                 <div className="rounded-lg border overflow-hidden">

@@ -66,6 +66,7 @@ export interface ScheduleEvent {
 }
 
 export const WEEKDAYS = ['週一', '週二', '週三', '週四', '週五']
+export const WEEKDAYS_WITH_WEEKENDS = ['週一', '週二', '週三', '週四', '週五', '週六', '週日']
 export const PERIODS = [1, 2, 3, 4, 5, 6, 7, 8]
 
 export const PERIOD_TIMES = {

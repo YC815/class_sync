@@ -45,8 +45,26 @@ export async function POST(
     console.log('📋 [SyncDeleted] Found database events for this week:', dbEvents.length)
     
     // Get all events from Google Calendar for this week
-    const calendarEvents = await calendarService.listEvents(weekStart)
-    console.log('📅 [SyncDeleted] Found Google Calendar events:', calendarEvents.length)
+    let calendarEvents: any[] = []
+    try {
+      calendarEvents = await calendarService.listEvents(weekStart)
+      console.log('📅 [SyncDeleted] Found Google Calendar events:', calendarEvents.length)
+    } catch (error: any) {
+      console.error('❌ [SyncDeleted] Failed to fetch Google Calendar events:', error.message)
+      
+      // Handle specific OAuth/authentication errors
+      if (error.status === 401 || error.code === 401) {
+        console.log('🔑 [SyncDeleted] OAuth token expired or invalid')
+        return NextResponse.json({ 
+          error: 'Google Calendar access expired. Please sign out and sign in again to refresh your permissions.',
+          code: 'TOKEN_EXPIRED'
+        }, { status: 401 })
+      }
+      
+      // For other errors, still try to clean up database but skip Google Calendar sync
+      console.log('⚠️ [SyncDeleted] Continuing with database cleanup only')
+      calendarEvents = []
+    }
     
     // Create a set of calendar event IDs that exist in Google Calendar
     const existingCalendarEventIds = new Set(
@@ -61,6 +79,58 @@ export async function POST(
     const eventsToDelete = dbEvents.filter(dbEvent => 
       dbEvent.calendarEventId && !existingCalendarEventIds.has(dbEvent.calendarEventId)
     )
+    
+    // Also find events that have no calendarEventId but might be duplicates
+    const eventsWithoutCalendarId = dbEvents.filter(dbEvent => !dbEvent.calendarEventId)
+    
+    console.log('🔍 [SyncDeleted] Events without Calendar ID:', eventsWithoutCalendarId.length)
+    
+    // For events without calendarEventId, check if similar events exist in Google Calendar
+    for (const dbEvent of eventsWithoutCalendarId) {
+      const similarCalendarEvents = calendarEvents.filter(calEvent => {
+        const calEventStart = calEvent.start?.dateTime ? new Date(calEvent.start.dateTime) : null
+        const calEventEnd = calEvent.end?.dateTime ? new Date(calEvent.end.dateTime) : null
+        
+        if (!calEventStart || !calEventEnd) return false
+        
+        // Check if the calendar event matches this database event based on time and name
+        const expectedStart = new Date(weekStart)
+        // Fix: weekday is 1-based (Monday=1, Tuesday=2, etc.)
+        // weekStart is guaranteed to be Monday, so we add (weekday - 1) days
+        const daysToAdd = dbEvent.weekday - 1
+        expectedStart.setDate(expectedStart.getDate() + daysToAdd)
+        
+        const startTime = dbEvent.periodStart === 1 ? 825 : 
+                         dbEvent.periodStart === 2 ? 920 :
+                         dbEvent.periodStart === 3 ? 1015 :
+                         dbEvent.periodStart === 4 ? 1110 :
+                         dbEvent.periodStart === 5 ? 1315 :
+                         dbEvent.periodStart === 6 ? 1410 :
+                         dbEvent.periodStart === 7 ? 1505 :
+                         dbEvent.periodStart === 8 ? 1600 : 825
+        
+        expectedStart.setHours(Math.floor(startTime / 100), startTime % 100, 0, 0)
+        
+        // Check if calendar event time matches expected time (within 1 hour tolerance)
+        const timeDiff = Math.abs(calEventStart.getTime() - expectedStart.getTime())
+        const summaryMatch = calEvent.summary === dbEvent.courseName
+        
+        // Additional verification: check if the event has our app's extended properties
+        const hasAppMetadata = calEvent.extendedProperties?.private?.source === 'class_sync'
+        
+        return timeDiff <= 3600000 && summaryMatch && hasAppMetadata // 1 hour tolerance with metadata check
+      })
+      
+      if (similarCalendarEvents.length > 0) {
+        // Update database with the calendar event ID
+        const matchingCalEvent = similarCalendarEvents[0]
+        await prisma.event.update({
+          where: { id: dbEvent.id },
+          data: { calendarEventId: matchingCalEvent.id }
+        })
+        console.log(`✅ [SyncDeleted] Linked DB event ${dbEvent.id} with Calendar event ${matchingCalEvent.id}`)
+      }
+    }
     
     console.log('🗑️ [SyncDeleted] Events to delete from database:', eventsToDelete.length)
     console.log('🗑️ [SyncDeleted] Events to delete details:', eventsToDelete.map(e => ({

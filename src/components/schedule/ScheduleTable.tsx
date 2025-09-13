@@ -16,7 +16,8 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select'
-import { Link } from 'lucide-react'
+import { Link, Plus } from 'lucide-react'
+import { Button } from '@/components/ui/button'
 import AddTempCourseDialog from './AddTempCourseDialog'
 import { 
   WeekSchedule, 
@@ -24,6 +25,7 @@ import {
   Base,
   ScheduleCell, 
   WEEKDAYS, 
+  WEEKDAYS_WITH_WEEKENDS,
   PERIODS, 
   PERIOD_TIMES,
   BASES,
@@ -37,6 +39,10 @@ interface ScheduleTableProps {
   bases: Base[]
   onScheduleChange: (schedule: WeekSchedule) => void
   currentWeek: Date
+  showSaturday: boolean
+  showSunday: boolean
+  onToggleSaturday: (show: boolean) => void
+  onToggleSunday: (show: boolean) => void
 }
 
 export default function ScheduleTable({ 
@@ -44,7 +50,11 @@ export default function ScheduleTable({
   courses, 
   bases,
   onScheduleChange,
-  currentWeek
+  currentWeek,
+  showSaturday,
+  showSunday,
+  onToggleSaturday,
+  onToggleSunday
 }: ScheduleTableProps) {
   const [tempCourseDialog, setTempCourseDialog] = useState<{open: boolean, day: number, period: number}>({
     open: false,
@@ -52,9 +62,13 @@ export default function ScheduleTable({
     period: 0
   })
 
-  // Calculate dates for each weekday
+  // Calculate dates for each weekday (including weekends if shown)
   const getWeekdayDates = () => {
-    return WEEKDAYS.map((_, index) => {
+    const baseWeekdays = [...WEEKDAYS]
+    if (showSaturday) baseWeekdays.push('週六')
+    if (showSunday) baseWeekdays.push('週日')
+    
+    return baseWeekdays.map((_, index) => {
       const date = new Date(currentWeek)
       date.setDate(currentWeek.getDate() + index)
       return date.toLocaleDateString('zh-TW', { month: 'numeric', day: 'numeric' })
@@ -62,6 +76,34 @@ export default function ScheduleTable({
   }
 
   const weekdayDates = getWeekdayDates()
+  // Build weekdays array based on what should be shown
+  const currentWeekdays = React.useMemo(() => {
+    const baseWeekdays = [...WEEKDAYS]
+    if (showSaturday) baseWeekdays.push('週六')
+    if (showSunday) baseWeekdays.push('週日')
+    return baseWeekdays
+  }, [showSaturday, showSunday])
+  
+  // Initialize weekend days in schedule if showing weekends
+  React.useEffect(() => {
+    const needsUpdate = (showSaturday && !schedule[6]) || (showSunday && !schedule[7])
+    if (needsUpdate) {
+      const newSchedule = { ...schedule }
+      if (showSaturday && !newSchedule[6]) {
+        newSchedule[6] = {}
+        for (let period = 1; period <= 8; period++) {
+          newSchedule[6][period] = null
+        }
+      }
+      if (showSunday && !newSchedule[7]) {
+        newSchedule[7] = {}
+        for (let period = 1; period <= 8; period++) {
+          newSchedule[7][period] = null
+        }
+      }
+      onScheduleChange(newSchedule)
+    }
+  }, [showSaturday, showSunday, schedule, onScheduleChange])
   const updateCell = (day: number, period: number, data: ScheduleCell | null) => {
     const newSchedule = { ...schedule }
     newSchedule[day] = { ...newSchedule[day], [period]: data }
@@ -206,7 +248,7 @@ export default function ScheduleTable({
             <TableRow>
               <TableHead className="w-16 text-center align-middle">節次</TableHead>
               <TableHead className="w-20 text-center text-xs align-middle">時間</TableHead>
-              {WEEKDAYS.map((day, index) => {
+              {currentWeekdays.map((day, index) => {
                 const dayIndex = index + 1
                 const morningConflict = checkHalfDayBaseConflict(dayIndex, 'morning')
                 const afternoonConflict = checkHalfDayBaseConflict(dayIndex, 'afternoon')
@@ -222,6 +264,33 @@ export default function ScheduleTable({
                   </TableHead>
                 )
               })}
+              {/* Weekend toggle buttons */}
+              {!showSaturday && (
+                <TableHead className="text-center min-w-20 px-1 align-middle">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => onToggleSaturday(true)}
+                    className="h-8 px-2 text-xs"
+                  >
+                    <Plus className="w-3 h-3 mr-1" />
+                    週六
+                  </Button>
+                </TableHead>
+              )}
+              {!showSunday && (
+                <TableHead className="text-center min-w-20 px-1 align-middle">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => onToggleSunday(true)}
+                    className="h-8 px-2 text-xs"
+                  >
+                    <Plus className="w-3 h-3 mr-1" />
+                    週日
+                  </Button>
+                </TableHead>
+              )}
             </TableRow>
           </TableHeader>
           <TableBody>
@@ -233,7 +302,7 @@ export default function ScheduleTable({
               <TableCell className="text-xs text-blue-600">
                 基地整理
               </TableCell>
-              {WEEKDAYS.map((_, dayIndex) => {
+              {currentWeekdays.map((_, dayIndex) => {
                 const day = dayIndex + 1
                 const morningBase = getHalfDayBaseDisplay(day, 'morning')
                 const morningConflict = checkHalfDayBaseConflict(day, 'morning')
@@ -252,6 +321,9 @@ export default function ScheduleTable({
                   </TableCell>
                 )
               })}
+              {/* Empty cells for weekend buttons when not showing weekends */}
+              {!showSaturday && <TableCell></TableCell>}
+              {!showSunday && <TableCell></TableCell>}
             </TableRow>
             {PERIODS.map(period => (
               <React.Fragment key={period}>
@@ -262,7 +334,7 @@ export default function ScheduleTable({
                   <TableCell className="text-xs text-muted-foreground align-top">
                     {PERIOD_TIMES[period as keyof typeof PERIOD_TIMES]}
                   </TableCell>
-                  {WEEKDAYS.map((_, dayIndex) => {
+                  {currentWeekdays.map((_, dayIndex) => {
                     const day = dayIndex + 1
                     const cell = schedule[day]?.[period]
                     
@@ -374,6 +446,9 @@ export default function ScheduleTable({
                       </TableCell>
                     )
                   })}
+                  {/* Empty cells for weekend buttons when not showing weekends */}
+                  {!showSaturday && <TableCell></TableCell>}
+                  {!showSunday && <TableCell></TableCell>}
                 </TableRow>
                 {period === 4 && (
                   <>
@@ -384,11 +459,14 @@ export default function ScheduleTable({
                       <TableCell className="text-xs text-yellow-600">
                         11:55-13:25
                       </TableCell>
-                      {WEEKDAYS.map((_, dayIndex) => (
+                      {currentWeekdays.map((_, dayIndex) => (
                         <TableCell key={`lunch-${dayIndex}`} className="text-center text-yellow-600 text-xs font-medium">
                           午間休息
                         </TableCell>
                       ))}
+                      {/* Empty cells for weekend buttons when not showing weekends */}
+                      {!showSaturday && <TableCell></TableCell>}
+                      {!showSunday && <TableCell></TableCell>}
                     </TableRow>
                     <TableRow className="bg-blue-50/50">
                       <TableCell className="font-medium text-center text-blue-700">
@@ -397,7 +475,7 @@ export default function ScheduleTable({
                       <TableCell className="text-xs text-blue-600">
                         基地整理
                       </TableCell>
-                      {WEEKDAYS.map((_, dayIndex) => {
+                      {currentWeekdays.map((_, dayIndex) => {
                         const day = dayIndex + 1
                         const afternoonBase = getHalfDayBaseDisplay(day, 'afternoon')
                         const afternoonConflict = checkHalfDayBaseConflict(day, 'afternoon')
@@ -416,6 +494,9 @@ export default function ScheduleTable({
                           </TableCell>
                         )
                       })}
+                      {/* Empty cells for weekend buttons when not showing weekends */}
+                      {!showSaturday && <TableCell></TableCell>}
+                      {!showSunday && <TableCell></TableCell>}
                     </TableRow>
                   </>
                 )}

@@ -52,18 +52,24 @@ export class GoogleCalendarService {
       timeMax: weekEnd.toISOString(),
       singleEvents: true,
       orderBy: 'startTime',
-      q: 'source:class_sync', // Filter for our events
     })
 
     console.log('🔍 [GoogleCalendar] Found events:', response.data.items?.length || 0)
-    console.log('🔍 [GoogleCalendar] Events details:', response.data.items?.map(e => ({
+    
+    // Filter for events created by our app (using extendedProperties.private.source)
+    const ourEvents = (response.data.items || []).filter(event => 
+      event.extendedProperties?.private?.source === 'class_sync'
+    )
+    
+    console.log('🔍 [GoogleCalendar] Our events (filtered):', ourEvents.length)
+    console.log('🔍 [GoogleCalendar] Our events details:', ourEvents.map(e => ({
       id: e.id,
       summary: e.summary,
       start: e.start,
       extendedProperties: e.extendedProperties
     })))
 
-    return response.data.items as CalendarEvent[]
+    return ourEvents as CalendarEvent[]
   }
 
   async createEvent(event: CalendarEvent): Promise<string> {
@@ -134,10 +140,16 @@ export class GoogleCalendarService {
     console.log('📅 [GoogleCalendar] Date calculation:', {
       weekStart: weekStart.toISOString(),
       weekday: scheduleEvent.weekday,
-      calculation: `${weekStart.getDate()} + ${scheduleEvent.weekday} - 1 = ${weekStart.getDate() + scheduleEvent.weekday - 1}`,
+      weekStartDay: weekStart.getDay(),
+      daysToAdd: scheduleEvent.weekday - 1,
       beforeSetDate: eventDate.toISOString()
     })
-    eventDate.setDate(weekStart.getDate() + scheduleEvent.weekday - 1)
+    
+    // Fix: Use setDate() correctly to handle month boundaries
+    // weekday is 1-based (Monday=1, Tuesday=2, etc.)
+    // weekStart is guaranteed to be Monday, so we add (weekday - 1) days
+    const daysToAdd = scheduleEvent.weekday - 1
+    eventDate.setDate(eventDate.getDate() + daysToAdd)
     console.log('📅 [GoogleCalendar] Final event date:', eventDate.toISOString())
 
     const startTime = this.getPeriodTime(scheduleEvent.periodStart, true)

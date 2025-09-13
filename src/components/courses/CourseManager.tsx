@@ -5,6 +5,14 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { 
+  Table, 
+  TableBody, 
+  TableCell, 
+  TableHead, 
+  TableHeader, 
+  TableRow 
+} from '@/components/ui/table'
 import {
   Dialog,
   DialogContent,
@@ -268,62 +276,77 @@ export default function CourseManager({ courses, onCoursesChange }: CourseManage
       </div>
 
       {/* Courses List */}
-      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-        {courses.map((course) => (
-          <Card key={course.id}>
-            <CardHeader className="pb-3">
-              <CardTitle className="text-lg flex items-center justify-between">
-                <span>{course.name}</span>
-                <div className="flex gap-1">
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    onClick={() => openEditDialog(course)}
-                  >
-                    <Edit2 className="w-3 h-3" />
-                  </Button>
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    onClick={() => handleDelete(course.id)}
-                  >
-                    <Trash2 className="w-3 h-3" />
-                  </Button>
-                </div>
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              {course.links && course.links.length > 0 ? (
-                <div className="space-y-2">
-                  {course.links.map((link, index) => (
-                    <div key={link.id || index} className="flex items-center gap-2">
-                      <Link className="w-4 h-4 text-blue-500" />
-                      <div className="flex-1 min-w-0">
-                        <div className="text-sm font-medium truncate">{link.name}</div>
-                        <a 
-                          href={link.url} 
-                          target="_blank" 
-                          rel="noopener noreferrer"
-                          className="text-xs text-blue-500 hover:underline truncate block"
-                        >
-                          {link.url}
-                        </a>
-                      </div>
+      <div className="border rounded-lg">
+        <Table>
+          <TableHeader>
+            <TableRow>
+              <TableHead className="font-semibold">課程名稱</TableHead>
+              <TableHead className="font-semibold">連結</TableHead>
+              <TableHead className="w-24 text-center font-semibold">操作</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {courses.map((course) => (
+              <TableRow key={course.id}>
+                <TableCell className="font-medium">
+                  {course.name}
+                </TableCell>
+                <TableCell>
+                  {course.links && course.links.length > 0 ? (
+                    <div className="space-y-1">
+                      {course.links.map((link, index) => (
+                        <div key={link.id || index} className="flex items-center gap-2">
+                          <Link className="w-3 h-3 text-blue-500 flex-shrink-0" />
+                          <div className="flex-1 min-w-0">
+                            <span className="text-sm font-medium">{link.name}: </span>
+                            <a 
+                              href={link.url} 
+                              target="_blank" 
+                              rel="noopener noreferrer"
+                              className="text-sm text-blue-500 hover:underline"
+                            >
+                              {link.url}
+                            </a>
+                          </div>
+                        </div>
+                      ))}
                     </div>
-                  ))}
-                </div>
-              ) : (
-                <p className="text-sm text-muted-foreground">無連結</p>
-              )}
-            </CardContent>
-          </Card>
-        ))}
+                  ) : (
+                    <span className="text-sm text-muted-foreground">無連結</span>
+                  )}
+                </TableCell>
+                <TableCell>
+                  <div className="flex items-center justify-center gap-1">
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() => openEditDialog(course)}
+                      title="編輯課程"
+                    >
+                      <Edit2 className="w-3 h-3" />
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() => handleDelete(course.id)}
+                      title="刪除課程"
+                    >
+                      <Trash2 className="w-3 h-3" />
+                    </Button>
+                  </div>
+                </TableCell>
+              </TableRow>
+            ))}
+          </TableBody>
+        </Table>
       </div>
 
       {courses.length === 0 && (
-        <div className="text-center py-12">
-          <h3 className="text-lg font-semibold mb-2">尚無課程</h3>
-          <p className="text-muted-foreground mb-4">點擊「新增課程」開始建立課程庫</p>
+        <div className="border rounded-lg">
+          <div className="text-center py-12">
+            <h3 className="text-lg font-semibold mb-2">尚無課程</h3>
+            <p className="text-muted-foreground mb-4">點擊「新增課程」開始建立課程庫</p>
+          </div>
         </div>
       )}
     </div>

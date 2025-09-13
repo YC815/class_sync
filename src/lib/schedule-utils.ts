@@ -37,7 +37,22 @@ export function formatDateRange(weekStart: Date): string {
 export function initializeEmptySchedule(): WeekSchedule {
   const schedule: WeekSchedule = {}
   
+  // Initialize weekdays (1-5) by default
   for (let day = 1; day <= 5; day++) {
+    schedule[day] = {}
+    for (let period = 1; period <= 8; period++) {
+      schedule[day][period] = null
+    }
+  }
+  
+  return schedule
+}
+
+export function initializeEmptyScheduleWithWeekends(): WeekSchedule {
+  const schedule: WeekSchedule = {}
+  
+  // Initialize all 7 days (1-7: Mon-Sun)
+  for (let day = 1; day <= 7; day++) {
     schedule[day] = {}
     for (let period = 1; period <= 8; period++) {
       schedule[day][period] = null
@@ -106,8 +121,8 @@ export function validateScheduleData(schedule: WeekSchedule): string[] {
   
   Object.keys(schedule).forEach(day => {
     const dayNum = parseInt(day)
-    if (isNaN(dayNum) || dayNum < 1 || dayNum > 5) {
-      errors.push(`Invalid weekday: ${day} (must be 1-5 for Mon-Fri)`)
+    if (isNaN(dayNum) || dayNum < 1 || dayNum > 7) {
+      errors.push(`Invalid weekday: ${day} (must be 1-7 for Mon-Sun)`)
     }
     
     if (schedule[dayNum]) {
@@ -127,8 +142,8 @@ export function validateScheduleData(schedule: WeekSchedule): string[] {
 export function validateScheduleEvent(event: ScheduleEvent): string[] {
   const errors: string[] = []
   
-  if (!event.weekday || event.weekday < 1 || event.weekday > 5) {
-    errors.push(`Invalid weekday: ${event.weekday} (must be 1-5)`)
+  if (!event.weekday || event.weekday < 1 || event.weekday > 7) {
+    errors.push(`Invalid weekday: ${event.weekday} (must be 1-7)`)
   }
   
   if (!event.periodStart || event.periodStart < 1 || event.periodStart > 8) {
@@ -148,4 +163,42 @@ export function validateScheduleEvent(event: ScheduleEvent): string[] {
   }
   
   return errors
+}
+
+// Check if a schedule has weekend courses (Saturday=6, Sunday=7)
+export function hasWeekendCourses(schedule: WeekSchedule): boolean {
+  for (const day of [6, 7]) { // Saturday and Sunday
+    if (schedule[day]) {
+      for (const period of Object.keys(schedule[day])) {
+        if (schedule[day][parseInt(period)]) {
+          return true
+        }
+      }
+    }
+  }
+  return false
+}
+
+// Check if a schedule has Saturday courses (Saturday=6)
+export function hasSaturdayCourses(schedule: WeekSchedule): boolean {
+  if (schedule[6]) {
+    for (const period of Object.keys(schedule[6])) {
+      if (schedule[6][parseInt(period)]) {
+        return true
+      }
+    }
+  }
+  return false
+}
+
+// Check if a schedule has Sunday courses (Sunday=7)  
+export function hasSundayCourses(schedule: WeekSchedule): boolean {
+  if (schedule[7]) {
+    for (const period of Object.keys(schedule[7])) {
+      if (schedule[7][parseInt(period)]) {
+        return true
+      }
+    }
+  }
+  return false
 }
