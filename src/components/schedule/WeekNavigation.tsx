@@ -6,6 +6,10 @@ import { formatDateRange } from '@/lib/schedule-utils'
 import { toast } from 'sonner'
 import { useState } from 'react'
 
+function formatDateLocal(date: Date): string {
+  return date.toLocaleDateString('en-CA', { timeZone: 'Asia/Taipei' })
+}
+
 interface WeekNavigationProps {
   currentWeek: Date
   onWeekChange: (week: Date) => void
@@ -78,7 +82,7 @@ export default function WeekNavigation({
   const copyPreviousWeek = async () => {
     setIsLoading(true)
     try {
-      const weekStartStr = currentWeek.toISOString().split('T')[0]
+      const weekStartStr = formatDateLocal(currentWeek)
       const response = await fetch(`/api/weeks/${weekStartStr}/copy-previous`, {
         method: 'POST'
       })

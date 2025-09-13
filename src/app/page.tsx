@@ -31,6 +31,11 @@ import { useNavbarHeight } from '@/lib/hooks'
 import { toast } from 'sonner'
 
 
+function formatDateLocal(date: Date): string {
+  return date.toLocaleDateString('en-CA', { timeZone: 'Asia/Taipei' })
+}
+
+
 export default function Home() {
   const { data: session, status } = useSession()
   const navbarRef = useRef<HTMLElement>(null)
@@ -101,7 +106,7 @@ export default function Home() {
   const loadWeekSchedule = useCallback(async (week: Date) => {
     setIsLoadingSchedule(true)
     try {
-      const weekStartStr = week.toISOString().split('T')[0]
+      const weekStartStr = formatDateLocal(week)
       const response = await fetch(`/api/weeks/${weekStartStr}`)
       
       if (response.ok) {
@@ -143,7 +148,7 @@ export default function Home() {
 
   const syncDeletedEvents = useCallback(async (week: Date) => {
     try {
-      const weekStartStr = week.toISOString().split('T')[0]
+      const weekStartStr = formatDateLocal(week)
       console.log('🔄 [SyncDeleted] Starting sync for deleted events for week:', weekStartStr)
       
       const response = await fetch(`/api/weeks/${weekStartStr}/sync-deleted`, {
@@ -194,7 +199,7 @@ export default function Home() {
       return
     }
     
-    const weekStartStr = currentWeek.toISOString().split('T')[0]
+    const weekStartStr = formatDateLocal(currentWeek)
     console.log('🔍 [Preview] Starting preview for week:', weekStartStr)
     console.log('🔍 [Preview] Current schedule data:', schedule)
     
@@ -238,7 +243,7 @@ export default function Home() {
       throw new Error('Missing preview changes or current week')
     }
     
-    const weekStartStr = currentWeek.toISOString().split('T')[0]
+    const weekStartStr = formatDateLocal(currentWeek)
     console.log('🔄 [Sync] Starting sync for week:', weekStartStr)
     console.log('🔄 [Sync] Preview changes:', {
       create: previewChanges.create.length,
@@ -540,7 +545,7 @@ export default function Home() {
                         setShowSunday(hasSunday)
                         // 自動保存課表變更 (debounced)
                         if (currentWeek) {
-                          const weekStartStr = currentWeek.toISOString().split('T')[0]
+                          const weekStartStr = formatDateLocal(currentWeek)
                           setTimeout(() => saveScheduleData(weekStartStr, newSchedule), 1000)
                         }
                       }}
@@ -565,7 +570,7 @@ export default function Home() {
                       setShowSunday(hasSunday)
                       // 自動保存課表變更 (debounced)
                       if (currentWeek) {
-                        const weekStartStr = currentWeek.toISOString().split('T')[0]
+                        const weekStartStr = formatDateLocal(currentWeek)
                         setTimeout(() => saveScheduleData(weekStartStr, newSchedule), 1000)
                       }
                     }}

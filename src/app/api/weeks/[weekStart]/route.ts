@@ -4,6 +4,10 @@ import { prisma } from '@/lib/prisma'
 import { authOptions } from '@/lib/auth'
 import { WeekSchedule } from '@/lib/types'
 
+function formatDateLocal(date: Date): string {
+  return date.toLocaleDateString('en-CA', { timeZone: 'Asia/Taipei' })
+}
+
 export async function GET(
   request: NextRequest,
   { params }: { params: Promise<{ weekStart: string }> }
@@ -84,7 +88,7 @@ export async function GET(
 
     return NextResponse.json({ 
       schedule,
-      weekStart: weekStart.toISOString().split('T')[0],
+      weekStart: formatDateLocal(weekStart),
       totalEvents
     })
   } catch (error) {
