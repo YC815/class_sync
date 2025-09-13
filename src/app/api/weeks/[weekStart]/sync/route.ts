@@ -82,28 +82,35 @@ export async function POST(
     
     // Delete events that are no longer in the schedule
     for (const eventId of eventsToDelete) {
-      try {
-        await calendarService.deleteEvent(eventId)
-
-        // Remove from database
-        await prisma.event.deleteMany({
-          where: {
-            userId,
-            calendarEventId: eventId
-          }
-        })
-      } catch (error) {
-        const statusCode = (error as any)?.code || (error as any)?.response?.status
-        if (statusCode === 401) {
-          console.warn(`Unauthorized while deleting event ${eventId}:`, error)
-          return NextResponse.json(
-            { error: 'Google Calendar authorization failed. Please sign in again.' },
-            { status: 401 }
-          )
-        }
-        console.warn(`Failed to delete event ${eventId}:`, error)
-      }
+  let shouldRemoveFromDb = false
+  try {
+    await calendarService.deleteEvent(eventId)
+    shouldRemoveFromDb = true
+    console.log('🗑️ [Sync] Deleted calendar event:', eventId)
+  } catch (error: any) {
+    const status = error?.code || error?.status || error?.response?.status
+    if (status === 404 || status === 410) {
+      console.log(`⚠️ [Sync] Event ${eventId} not found in Google (status ${status}), removing from DB`)
+      shouldRemoveFromDb = true
+    } else if (status === 401) {
+      console.warn(`❌ [Sync] Unauthorized while deleting event ${eventId}:`, error)
+      return NextResponse.json(
+        { error: 'Google Calendar authorization failed. Please sign in again.' },
+        { status: 401 }
+      )
+    } else {
+      console.warn(`❗ [Sync] Failed to delete Google event ${eventId}:`, error)
     }
+  }
+
+  if (shouldRemoveFromDb) {
+    await prisma.event.deleteMany({
+      where: { userId, calendarEventId: eventId }
+    })
+    console.log('🗑️ [Sync] Removed event from database:', eventId)
+  }
+}
+
     
     // 清理該週所有在資料庫但不在新事件列表中的事件
     const newEventKeys = new Set(
