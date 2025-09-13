@@ -3,6 +3,7 @@ import { getServerSession } from 'next-auth'
 import { prisma } from '@/lib/prisma'
 import { GoogleCalendarService } from '@/lib/google-calendar'
 import { authOptions } from '@/lib/auth'
+import { WeekSchedule } from '@/lib/types'
 
 export async function POST(
   request: NextRequest,
@@ -152,6 +153,45 @@ export async function POST(
         console.log('✅ [SyncDeleted] Deleted database event:', eventToDelete.id)
       } catch (error) {
         console.error('❌ [SyncDeleted] Failed to delete database event:', eventToDelete.id, error)
+      }
+    }
+
+    // Also remove these events from the saved week schedule
+    if (deletedEventIds.length > 0) {
+      try {
+        const weekRecord = await prisma.week.findUnique({
+          where: {
+            userId_weekStart: {
+              userId,
+              weekStart,
+            },
+          },
+        })
+
+        if (weekRecord?.data) {
+          const scheduleData = weekRecord.data as WeekSchedule
+          eventsToDelete.forEach(event => {
+            for (let p = event.periodStart; p <= event.periodEnd; p++) {
+              if (!scheduleData[event.weekday]) {
+                scheduleData[event.weekday] = {}
+              }
+              scheduleData[event.weekday][p] = null
+            }
+          })
+
+          await prisma.week.update({
+            where: {
+              userId_weekStart: {
+                userId,
+                weekStart,
+              },
+            },
+            data: { data: scheduleData },
+          })
+          console.log('✅ [SyncDeleted] Updated week schedule to remove deleted events')
+        }
+      } catch (scheduleError) {
+        console.error('❌ [SyncDeleted] Failed to update week schedule:', scheduleError)
       }
     }
     
