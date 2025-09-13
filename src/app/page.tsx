@@ -214,7 +214,13 @@ export default function Home() {
       })
 
       console.log('🔍 [Preview] Response status:', response.status)
-      
+
+      if (response.status === 401) {
+        toast.error('登入逾期，請重新登入')
+        await signOut()
+        return
+      }
+
       if (!response.ok) {
         const errorText = await response.text()
         console.error('🔍 [Preview] Response error:', errorText)
@@ -271,7 +277,15 @@ export default function Home() {
       })
 
       console.log('📅 [Sync] Sync response status:', response.status)
-      
+
+      if (response.status === 401) {
+        const errorData = await response.json().catch(() => ({}))
+        console.error('📅 [Sync] Unauthorized:', errorData)
+        toast.error('登入逾期，請重新登入')
+        await signOut()
+        throw new Error(errorData.error || 'Unauthorized')
+      }
+
       if (!response.ok) {
         const errorData = await response.json()
         console.error('📅 [Sync] Sync error response:', errorData)

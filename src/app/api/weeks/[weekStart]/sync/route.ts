@@ -84,7 +84,7 @@ export async function POST(
     for (const eventId of eventsToDelete) {
       try {
         await calendarService.deleteEvent(eventId)
-        
+
         // Remove from database
         await prisma.event.deleteMany({
           where: {
@@ -93,6 +93,14 @@ export async function POST(
           }
         })
       } catch (error) {
+        const statusCode = (error as any)?.code || (error as any)?.response?.status
+        if (statusCode === 401) {
+          console.warn(`Unauthorized while deleting event ${eventId}:`, error)
+          return NextResponse.json(
+            { error: 'Google Calendar authorization failed. Please sign in again.' },
+            { status: 401 }
+          )
+        }
         console.warn(`Failed to delete event ${eventId}:`, error)
       }
     }
@@ -112,6 +120,14 @@ export async function POST(
           })
           console.log('Cleaned up orphaned event:', key)
         } catch (error) {
+          const statusCode = (error as any)?.code || (error as any)?.response?.status
+          if (statusCode === 401) {
+            console.warn('Unauthorized while cleaning up orphaned event:', error)
+            return NextResponse.json(
+              { error: 'Google Calendar authorization failed. Please sign in again.' },
+              { status: 401 }
+            )
+          }
           console.warn('Failed to clean up orphaned event:', error)
         }
       }
@@ -230,6 +246,14 @@ export async function POST(
         console.log('✅ [Sync] Event saved to database with ID:', savedEvent.id)
         syncedEvents.push(savedEvent)
       } catch (eventError) {
+        const statusCode = (eventError as any)?.code || (eventError as any)?.response?.status
+        if (statusCode === 401) {
+          console.error('❌ [Sync] Unauthorized while syncing event:', eventError)
+          return NextResponse.json(
+            { error: 'Google Calendar authorization failed. Please sign in again.' },
+            { status: 401 }
+          )
+        }
         console.error('❌ [Sync] Failed to sync event:', {
           event: {
             courseName: event.courseName,
