@@ -1,6 +1,10 @@
 import { google } from 'googleapis'
 import { ScheduleEvent } from './types'
 
+function formatDateLocal(date: Date): string {
+  return date.toLocaleDateString('en-CA', { timeZone: 'Asia/Taipei' })
+}
+
 export interface CalendarEvent {
   id?: string
   summary: string
@@ -219,7 +223,7 @@ export class GoogleCalendarService {
       extendedProperties: {
         private: {
           source: 'class_sync',
-          weekStart: weekStart.toISOString().split('T')[0],
+          weekStart: formatDateLocal(weekStart),
           weekday: scheduleEvent.weekday.toString(),
           periodStart: scheduleEvent.periodStart.toString(),
           periodEnd: scheduleEvent.periodEnd.toString(),

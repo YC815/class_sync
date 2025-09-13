@@ -6,6 +6,10 @@ import { authOptions } from '@/lib/auth'
 import { mergeAdjacentPeriods } from '@/lib/schedule-utils'
 import { ScheduleEvent } from '@/lib/types'
 
+function formatDateLocal(date: Date): string {
+  return date.toLocaleDateString('en-CA', { timeZone: 'Asia/Taipei' })
+}
+
 export async function POST(
   request: NextRequest,
   { params }: { params: Promise<{ weekStart: string }> }
@@ -191,7 +195,7 @@ export async function POST(
     
     return NextResponse.json({ 
       changes,
-      weekStart: weekStart.toISOString().split('T')[0],
+      weekStart: formatDateLocal(weekStart),
       totalChanges
     })
   } catch (error) {
