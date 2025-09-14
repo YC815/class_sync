@@ -7,7 +7,6 @@ import { Button } from '@/components/ui/button'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import ScheduleTable from '@/components/schedule/ScheduleTable'
 import ScheduleTableSkeleton from '@/components/schedule/ScheduleTableSkeleton'
-import MobileDayView from '@/components/schedule/MobileDayView'
 import WeekNavigation from '@/components/schedule/WeekNavigation'
 import FloatingSyncButton from '@/components/schedule/FloatingSyncButton'
 import CourseManager from '@/components/courses/CourseManager'
@@ -575,7 +574,7 @@ export default function Home() {
             <div className="flex items-center space-x-4 md:space-x-8">
               <h1 className="text-lg md:text-xl font-bold">ClassSync</h1>
               
-              <Tabs value={activeTab} onValueChange={setActiveTab} className="hidden md:block">
+              <Tabs value={activeTab} onValueChange={setActiveTab}>
                 <TabsList>
                   <TabsTrigger value="schedule">週課表</TabsTrigger>
                   <TabsTrigger value="courses">課程庫</TabsTrigger>
@@ -677,16 +676,6 @@ export default function Home() {
             </div>
           </div>
           
-          {/* Mobile navigation */}
-          <div className="md:hidden pb-4">
-            <Tabs value={activeTab} onValueChange={setActiveTab}>
-              <TabsList className="w-full">
-                <TabsTrigger value="schedule" className="flex-1 text-xs sm:text-sm">週課表</TabsTrigger>
-                <TabsTrigger value="courses" className="flex-1 text-xs sm:text-sm">課程庫</TabsTrigger>
-                <TabsTrigger value="rooms" className="flex-1 text-xs sm:text-sm">教室庫</TabsTrigger>
-              </TabsList>
-            </Tabs>
-          </div>
         </div>
       </nav>
 
@@ -710,82 +699,35 @@ export default function Home() {
               />
               
               {isLoadingSchedule ? (
-                <>
-                  {/* 桌面版載入骨架 */}
-                  <div className="hidden md:block">
-                    <ScheduleTableSkeleton />
-                  </div>
-                  {/* 手機版載入骨架 */}
-                  <div className="md:hidden">
-                    <div className="flex items-center justify-center py-12">
-                      <div className="text-center">
-                        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-gray-900 mx-auto mb-4"></div>
-                        <p className="text-muted-foreground">載入中...</p>
-                      </div>
-                    </div>
-                  </div>
-                </>
+                <ScheduleTableSkeleton />
               ) : (
-                <>
-                  {/* 桌面版週課表 */}
-                  <div className="hidden md:block">
-                    <ScheduleTable
-                      schedule={schedule}
-                      courses={courses}
-                      bases={bases}
-                      onScheduleChange={(newSchedule) => {
-                        setSchedule(newSchedule)
-                        // 標記有待處理的變更
-                        setPendingChanges(newSchedule)
-                        setIsPreventingReload(true)
+                <ScheduleTable
+                  schedule={schedule}
+                  courses={courses}
+                  bases={bases}
+                  onScheduleChange={(newSchedule) => {
+                    setSchedule(newSchedule)
+                    // 標記有待處理的變更
+                    setPendingChanges(newSchedule)
+                    setIsPreventingReload(true)
 
-                        // 自動保存課表變更 (debounced)
-                        if (currentWeek) {
-                          const weekStartStr = formatDateLocal(currentWeek)
-                          setTimeout(() => {
-                            saveScheduleData(weekStartStr, newSchedule).then(() => {
-                              // 保存完成後清除防止重載標記
-                              setPendingChanges(null)
-                              setIsPreventingReload(false)
-                            }).catch(() => {
-                              // 保存失敗時保持標記
-                              console.warn('保存失敗，保持本地變更')
-                            })
-                          }, 1000)
-                        }
-                      }}
-                      currentWeek={currentWeek}
-                    />
-                  </div>
-                  
-                  {/* 手機版單日視圖 */}
-                  <MobileDayView
-                    schedule={schedule}
-                    courses={courses}
-                    onScheduleChange={(newSchedule) => {
-                      setSchedule(newSchedule)
-                      // 標記有待處理的變更
-                      setPendingChanges(newSchedule)
-                      setIsPreventingReload(true)
-
-                      // 自動保存課表變更 (debounced)
-                      if (currentWeek) {
-                        const weekStartStr = formatDateLocal(currentWeek)
-                        setTimeout(() => {
-                          saveScheduleData(weekStartStr, newSchedule).then(() => {
-                            // 保存完成後清除防止重載標記
-                            setPendingChanges(null)
-                            setIsPreventingReload(false)
-                          }).catch(() => {
-                            // 保存失敗時保持標記
-                            console.warn('保存失敗，保持本地變更')
-                          })
-                        }, 1000)
-                      }
-                    }}
-                    currentWeek={currentWeek}
-                  />
-                </>
+                    // 自動保存課表變更 (debounced)
+                    if (currentWeek) {
+                      const weekStartStr = formatDateLocal(currentWeek)
+                      setTimeout(() => {
+                        saveScheduleData(weekStartStr, newSchedule).then(() => {
+                          // 保存完成後清除防止重載標記
+                          setPendingChanges(null)
+                          setIsPreventingReload(false)
+                        }).catch(() => {
+                          // 保存失敗時保持標記
+                          console.warn('保存失敗，保持本地變更')
+                        })
+                      }, 1000)
+                    }
+                  }}
+                  currentWeek={currentWeek}
+                />
               )}
               
               <FloatingSyncButton

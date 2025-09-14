@@ -5,7 +5,7 @@ import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog'
-import { Calendar, Plus, Minus, Loader2, ExternalLink, Check, X, AlertCircle } from 'lucide-react'
+import { Calendar, Plus, Minus, Loader2, ExternalLink, Check, X, AlertCircle, Menu } from 'lucide-react'
 import { ScheduleEvent } from '@/lib/types'
 
 interface FloatingSyncButtonProps {
@@ -20,6 +20,7 @@ export default function FloatingSyncButton({
   isLoading = false
 }: FloatingSyncButtonProps) {
   const [showDialog, setShowDialog] = useState(false)
+  const [showMenu, setShowMenu] = useState(false)
   const [syncStep, setSyncStep] = useState<'syncing' | 'success' | 'error'>('syncing')
   const [syncError, setSyncError] = useState<string | null>(null)
   const [syncResult, setSyncResult] = useState<{ syncedEvents: number; deletedEvents: number; message: string } | null>(null)
@@ -49,43 +50,85 @@ export default function FloatingSyncButton({
 
   return (
     <>
-      {/* 浮動按鈕組 - 固定於底部中央，支援 safe-area */}
-      <div className="fixed bottom-6 left-1/2 transform -translate-x-1/2 z-40 pb-safe">
-        <div className="flex gap-3">
-          {onBaseView && (
-            <Button
-              onClick={onBaseView}
-              disabled={isLoading}
-              className="gap-2 px-4 py-3 h-12 text-sm font-medium shadow-lg hover:shadow-xl transition-all duration-200 bg-green-600 hover:bg-green-700 backdrop-blur-sm"
-              size="lg"
-              variant="default"
-            >
-              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
-              </svg>
-              檢視基地
-            </Button>
-          )}
+      {/* 圓形漢堡菜單按鈕 - 固定於右下角，支援 safe-area */}
+      <div className="fixed bottom-6 right-6 z-40 pb-safe pr-safe">
+        <div className="relative">
+          {/* 展開的菜單選項 */}
+          <div className={`absolute bottom-0 right-16 space-y-3 mr-2 transition-all duration-300 ease-in-out transform origin-bottom-right ${
+            showMenu
+              ? 'opacity-100 scale-100 translate-x-0'
+              : 'opacity-0 scale-75 translate-x-4 pointer-events-none'
+          }`}>
+            {onBaseView && (
+              <div className={`flex items-center justify-end transition-all duration-300 ease-in-out ${
+                showMenu ? 'opacity-100 translate-x-0 delay-100' : 'opacity-0 translate-x-4'
+              }`}>
+                <div className="bg-gray-800/95 backdrop-blur-sm text-white px-4 py-2 rounded-full text-sm mr-3 shadow-lg whitespace-nowrap">
+                  檢視基地
+                </div>
+                <Button
+                  onClick={() => {
+                    onBaseView()
+                    setShowMenu(false)
+                  }}
+                  disabled={isLoading}
+                  className="w-12 h-12 rounded-full shadow-lg hover:shadow-xl transition-transform duration-300 bg-green-600 hover:bg-green-700 hover:scale-110 p-0"
+                  size="lg"
+                >
+                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
+                  </svg>
+                </Button>
+              </div>
+            )}
+            <div className={`flex items-center justify-end transition-all duration-300 ease-in-out ${
+              showMenu ? 'opacity-100 translate-x-0 delay-150' : 'opacity-0 translate-x-4'
+            }`}>
+              <div className="bg-gray-800/95 backdrop-blur-sm text-white px-4 py-2 rounded-full text-sm mr-3 shadow-lg whitespace-nowrap">
+                同步到 Google Calendar
+              </div>
+              <Button
+                onClick={() => {
+                  handleSyncClick()
+                  setShowMenu(false)
+                }}
+                disabled={isLoading}
+                className="w-12 h-12 rounded-full shadow-lg hover:shadow-xl transition-transform duration-300 bg-blue-600 hover:bg-blue-700 hover:scale-110 p-0"
+                size="lg"
+              >
+                {isLoading ? (
+                  <Loader2 className="w-5 h-5 animate-spin" />
+                ) : (
+                  <Calendar className="w-5 h-5" />
+                )}
+              </Button>
+            </div>
+          </div>
+
+          {/* 主漢堡菜單按鈕 */}
           <Button
-            onClick={handleSyncClick}
-            disabled={isLoading}
-            className="gap-2 px-6 py-3 h-12 text-base font-medium shadow-lg hover:shadow-xl transition-all duration-200 bg-blue-600 hover:bg-blue-700 backdrop-blur-sm"
+            onClick={() => setShowMenu(!showMenu)}
+            className="w-14 h-14 rounded-full shadow-lg hover:shadow-xl transition-[colors,box-shadow] duration-300 ease-in-out bg-gray-900 hover:bg-gray-800 active:translate-y-0 p-0"
             size="lg"
           >
-            {isLoading ? (
-              <>
-                <Loader2 className="w-5 h-5 animate-spin" />
-                同步中...
-              </>
-            ) : (
-              <>
-                <Calendar className="w-5 h-5" />
-                同步 Google Calendar
-              </>
-            )}
+            <div className={`transition-all duration-300 ease-in-out ${
+              showMenu ? 'transform rotate-45' : 'transform rotate-0'
+            }`}>
+              <Menu className={`w-6 h-6 transition-all duration-300 ease-in-out ${
+                showMenu ? 'stroke-blue-300' : 'stroke-white'
+              }`} />
+            </div>
           </Button>
         </div>
       </div>
+
+      {/* 點擊外部關閉菜單 */}
+      {showMenu && (
+        <div
+          className="fixed inset-0 z-30"
+          onClick={() => setShowMenu(false)}
+        />
+      )}
 
       {/* 同步對話框 */}
       <Dialog open={showDialog} onOpenChange={setShowDialog}>
@@ -123,7 +166,7 @@ export default function FloatingSyncButton({
                   同步成功！
                 </DialogTitle>
               </DialogHeader>
-              
+
               <div className="space-y-4">
                 <Card className="border-green-200 bg-green-50">
                   <CardContent className="p-4 text-center">
@@ -132,10 +175,10 @@ export default function FloatingSyncButton({
                     </div>
                   </CardContent>
                 </Card>
-                
+
                 <div className="flex flex-col gap-2">
-                  <Button 
-                    variant="outline" 
+                  <Button
+                    variant="outline"
                     onClick={openGoogleCalendar}
                     className="gap-2"
                   >
@@ -164,7 +207,7 @@ export default function FloatingSyncButton({
                   同步失敗
                 </DialogTitle>
               </DialogHeader>
-              
+
               <div className="space-y-4">
                 <Card className="border-red-200 bg-red-50">
                   <CardContent className="p-4">
@@ -179,8 +222,8 @@ export default function FloatingSyncButton({
               </div>
 
               <DialogFooter className="gap-2">
-                <Button 
-                  variant="outline" 
+                <Button
+                  variant="outline"
                   onClick={() => setShowDialog(false)}
                 >
                   關閉
