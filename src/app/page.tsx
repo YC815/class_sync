@@ -19,6 +19,7 @@ import BaseViewDialog from '@/components/base/BaseViewDialog'
 import UsageDialog from '@/components/help/UsageDialog'
 import { WeekSchedule, Course, Base, ScheduleCell } from '@/lib/types'
 import { getWeekStart, initializeEmptyScheduleWithWeekends } from '@/lib/schedule-utils'
+import { loadLocalSchedule, saveLocalSchedule } from '@/lib/local-schedule'
 import { useNavbarHeight } from '@/lib/hooks'
 import { fetcher } from '@/lib/fetcher'
 import { toast } from 'sonner'
@@ -67,14 +68,18 @@ export default function Home() {
   const loadWeekScheduleRef = useRef<((week: Date, skipSyncDeleted?: boolean, preserveLocalChanges?: boolean) => Promise<void>) | undefined>(undefined)
 
   loadWeekScheduleRef.current = async (week: Date, skipSyncDeleted = false, preserveLocalChanges = false) => {
+    const weekStartStr = formatDateLocal(week)
+    const localSchedule = loadLocalSchedule(weekStartStr)
+
     // 如果有待處理的變更，則跳過載入以保護用戶輸入
     if (preserveLocalChanges && pendingChanges) {
       console.log('⏸️ [LoadSchedule] 跳過載入以保留本地變更')
       return
     }
 
-    // 如果正在防止重載，也跳過載入
-    if (isPreventingReload) {
+    // 如果正在防止重載，也跳過載入（僅限同一週）
+    const currentWeekStr = currentWeek ? formatDateLocal(currentWeek) : null
+    if (isPreventingReload && currentWeekStr === weekStartStr) {
       console.log('⏸️ [LoadSchedule] 正在防止重載，跳過載入')
       return
     }
@@ -83,7 +88,6 @@ export default function Home() {
     setSyncError(null)
 
     try {
-      const weekStartStr = formatDateLocal(week)
 
       // 並行執行載入課表和同步刪除的事件（如果需要的話）
       const promises = [fetch(`/api/weeks/${weekStartStr}`)]
@@ -126,16 +130,15 @@ export default function Home() {
           })
 
           // 合併邏輯：保留本地未同步項目，服務器已同步項目優先
-          const currentSchedule = schedule
           const mergedSchedule = { ...fullSchedule }
 
-          // 遍歷現有課表，保留未同步項目
-          Object.keys(currentSchedule).forEach(day => {
+          // 遍歷本地課表，保留未同步項目
+          Object.keys(localSchedule || {}).forEach(day => {
             const dayNum = parseInt(day)
             if (dayNum >= 1 && dayNum <= 7) {
-              Object.keys(currentSchedule[dayNum] || {}).forEach(period => {
+              Object.keys(localSchedule?.[dayNum] || {}).forEach(period => {
                 const periodNum = parseInt(period)
-                const currentCell = currentSchedule[dayNum]?.[periodNum]
+                const currentCell = localSchedule?.[dayNum]?.[periodNum]
                 const serverCell = fullSchedule[dayNum]?.[periodNum]
 
                 if (currentCell && !currentCell.isSynced && !serverCell) {
@@ -149,6 +152,7 @@ export default function Home() {
           })
 
           setSchedule(mergedSchedule)
+          saveLocalSchedule(weekStartStr, mergedSchedule)
 
           console.log(`載入 ${weekStartStr} 週課表:`, data.totalEvents || Object.keys(data.schedule).length, '個時段')
 
@@ -158,10 +162,14 @@ export default function Home() {
           }
         } else {
           // 只在沒有資料時才設定空課表
-          setSchedule(initializeEmptyScheduleWithWeekends())
+          const empty = initializeEmptyScheduleWithWeekends()
+          setSchedule(empty)
+          saveLocalSchedule(weekStartStr, empty)
         }
       } else if (scheduleResponse.status === 404) {
-        setSchedule(initializeEmptyScheduleWithWeekends())
+        const empty = initializeEmptyScheduleWithWeekends()
+        setSchedule(empty)
+        saveLocalSchedule(weekStartStr, empty)
       } else {
         console.warn('載入週課表失敗:', scheduleResponse.status)
         setSyncError('載入週課表失敗')
@@ -184,7 +192,13 @@ export default function Home() {
     } catch (error) {
       console.error('載入週課表錯誤:', error)
       setSyncError('載入週課表失敗')
-      // 網路錯誤時不重設課表，避免閃爍
+      if (localSchedule) {
+        setSchedule(localSchedule)
+      } else {
+        const empty = initializeEmptyScheduleWithWeekends()
+        setSchedule(empty)
+        saveLocalSchedule(weekStartStr, empty)
+      }
     } finally {
       setIsLoadingSchedule(false)
     }
@@ -689,6 +703,7 @@ export default function Home() {
                     // 自動保存課表變更 (debounced)
                     if (currentWeek) {
                       const weekStartStr = formatDateLocal(currentWeek)
+                      saveLocalSchedule(weekStartStr, newSchedule)
                       setTimeout(() => {
                         saveScheduleData(weekStartStr, newSchedule).then(() => {
                           // 保存完成後清除防止重載標記
