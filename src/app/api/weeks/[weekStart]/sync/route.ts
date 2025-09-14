@@ -111,34 +111,10 @@ export async function POST(
   }
 }
 
-    
-    // 清理該週所有在資料庫但不在新事件列表中的事件
-    const newEventKeys = new Set(
-      events.map((e: { weekday: number; periodStart: number; periodEnd: number; courseId?: string; courseName: string }) => `${e.weekday}-${e.periodStart}-${e.periodEnd}-${e.courseId || e.courseName}`)
-    )
-    
-    for (const existingEvent of existingEvents) {
-      const key = `${existingEvent.weekday}-${existingEvent.periodStart}-${existingEvent.periodEnd}-${existingEvent.courseId || existingEvent.courseName}`
-      if (!newEventKeys.has(key) && existingEvent.calendarEventId) {
-        try {
-          await calendarService.deleteEvent(existingEvent.calendarEventId)
-          await prisma.event.delete({
-            where: { id: existingEvent.id }
-          })
-          console.log('Cleaned up orphaned event:', key)
-        } catch (error) {
-          const statusCode = (error as any)?.code || (error as any)?.response?.status
-          if (statusCode === 401) {
-            console.warn('Unauthorized while cleaning up orphaned event:', error)
-            return NextResponse.json(
-              { error: 'Google Calendar authorization failed. Please sign in again.' },
-              { status: 401 }
-            )
-          }
-          console.warn('Failed to clean up orphaned event:', error)
-        }
-      }
-    }
+
+    // 註解：移除過度清理邏輯，避免誤刪既有課程
+    // 現在只處理明確標記在 eventsToDelete 中的事件
+    console.log('ℹ️ [Sync] Skipping automatic cleanup of existing events to preserve unchanged courses')
 
     // Create/update events
     const syncedEvents = []

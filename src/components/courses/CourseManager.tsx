@@ -21,6 +21,16 @@ import {
   DialogTitle,
   DialogTrigger,
 } from '@/components/ui/dialog'
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog'
 import { Plus, Edit2, Trash2, Link, Save, X } from 'lucide-react'
 import { Course, CourseLink } from '@/lib/types'
 import { useSession } from 'next-auth/react'
@@ -46,6 +56,8 @@ export default function CourseManager({ courses, onCoursesChange }: CourseManage
   })
   const { data: session } = useSession()
   const [isLoading, setIsLoading] = useState(false)
+  const [showDeleteDialog, setShowDeleteDialog] = useState(false)
+  const [courseToDelete, setCourseToDelete] = useState<string | null>(null)
 
   const resetForm = () => {
     setFormData({ name: '', links: [{ id: '', name: '', url: '', order: 0 }] })
@@ -133,11 +145,16 @@ export default function CourseManager({ courses, onCoursesChange }: CourseManage
     }
   }
 
-  const handleDelete = async (courseId: string) => {
-    if (!confirm('確定要刪除這個課程嗎？')) return
-    
+  const handleDelete = (courseId: string) => {
+    setCourseToDelete(courseId)
+    setShowDeleteDialog(true)
+  }
+
+  const confirmDelete = async () => {
+    if (!courseToDelete) return
+
     try {
-      const response = await fetch(`/api/courses/${courseId}`, {
+      const response = await fetch(`/api/courses/${courseToDelete}`, {
         method: 'DELETE',
       })
 
@@ -145,9 +162,11 @@ export default function CourseManager({ courses, onCoursesChange }: CourseManage
         throw new Error('Failed to delete course')
       }
 
-      const newCourses = courses.filter(c => c.id !== courseId)
+      const newCourses = courses.filter(c => c.id !== courseToDelete)
       onCoursesChange(newCourses)
       toast.success('課程已刪除')
+      setShowDeleteDialog(false)
+      setCourseToDelete(null)
     } catch (error) {
       console.error('Failed to delete course:', error)
       toast.error('刪除失敗，請稍後再試')
@@ -350,6 +369,24 @@ export default function CourseManager({ courses, onCoursesChange }: CourseManage
           </div>
         </div>
       )}
+
+      {/* Delete Course Confirmation Dialog */}
+      <AlertDialog open={showDeleteDialog} onOpenChange={setShowDeleteDialog}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>確認刪除課程</AlertDialogTitle>
+            <AlertDialogDescription>
+              確定要刪除這個課程嗎？此操作無法復原。
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>取消</AlertDialogCancel>
+            <AlertDialogAction onClick={confirmDelete} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
+              確認刪除
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   )
 }

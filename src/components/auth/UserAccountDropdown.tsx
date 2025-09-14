@@ -28,15 +28,17 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog'
-import { ChevronDown, LogOut, Settings } from 'lucide-react'
+import { ChevronDown, LogOut, Settings, RefreshCw } from 'lucide-react'
 import { toast } from 'sonner'
 
 interface UserAccountDropdownProps {
   onTestReset?: () => Promise<void>
+  onRecover?: () => void
   isResetting?: boolean
+  isLoading?: boolean
 }
 
-export default function UserAccountDropdown({ onTestReset, isResetting = false }: UserAccountDropdownProps) {
+export default function UserAccountDropdown({ onTestReset, onRecover, isResetting = false, isLoading = false }: UserAccountDropdownProps) {
   const { data: session, status } = useSession()
   const [showAdvancedSettings, setShowAdvancedSettings] = useState(false)
   const [showResetDialog, setShowResetDialog] = useState(false)
@@ -107,6 +109,20 @@ export default function UserAccountDropdown({ onTestReset, isResetting = false }
         </DropdownMenuTrigger>
 
         <DropdownMenuContent align="end" className="w-48">
+          {onRecover && (
+            <>
+              <DropdownMenuItem
+                onClick={onRecover}
+                disabled={isLoading}
+                className="gap-2"
+              >
+                <RefreshCw className="w-4 h-4" />
+                恢復事件
+              </DropdownMenuItem>
+              <DropdownMenuSeparator />
+            </>
+          )}
+
           <DropdownMenuItem onClick={() => signOut()} className="gap-2">
             <LogOut className="w-4 h-4" />
             登出

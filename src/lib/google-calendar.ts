@@ -31,6 +31,20 @@ export interface CalendarEvent {
   }
 }
 
+export interface ClassSyncMetadata {
+  source: string
+  weekStart: string
+  weekday: number
+  periodStart: number
+  periodEnd: number
+  courseId: string | null
+  seriesId: string | null
+  courseName: string
+  location: string | null
+  isCustomCourse?: boolean
+  timestamp: string
+}
+
 export class GoogleCalendarService {
   private calendar
 
@@ -140,6 +154,33 @@ export class GoogleCalendarService {
     console.log('✅ [GoogleCalendar] Event deleted:', eventId)
   }
 
+  /**
+   * 從 Google Calendar 事件描述中解析 ClassSync JSON 標記
+   */
+  parseClassSyncMetadata(description: string | null | undefined): ClassSyncMetadata | null {
+    if (!description) return null
+
+    try {
+      // 尋找 ClassSync 資料標記
+      const classSyncPattern = /---\nClassSync 資料：\n([\s\S]*)/
+      const match = description.match(classSyncPattern)
+
+      if (!match || !match[1]) return null
+
+      const jsonStr = match[1].trim()
+      const metadata = JSON.parse(jsonStr) as ClassSyncMetadata
+
+      // 驗證是否為 ClassSync 來源
+      if (metadata.source !== 'class_sync') return null
+
+      return metadata
+    } catch (error) {
+      console.warn('Failed to parse ClassSync metadata from description:', error)
+      return null
+    }
+  }
+
+
   scheduleEventToCalendarEvent(
     scheduleEvent: ScheduleEvent,
     weekStart: Date,
@@ -231,6 +272,7 @@ export class GoogleCalendarService {
       seriesId: scheduleEvent.seriesId || null,
       courseName: scheduleEvent.courseName,
       location: scheduleEvent.location || null,
+      isCustomCourse: !scheduleEvent.courseId, // 標記是否為自訂課程（沒有courseId的為自訂課程）
       timestamp: new Date().toISOString()
     }
 
@@ -269,14 +311,14 @@ export class GoogleCalendarService {
 
   private getPeriodTime(period: number, isStart: boolean): number {
     const times = {
-      1: [825, 910],   // 08:25-09:10
-      2: [920, 1005],  // 09:20-10:05
-      3: [1015, 1100], // 10:15-11:00
-      4: [1110, 1155], // 11:10-11:55
-      5: [1315, 1400], // 13:15-14:00
-      6: [1410, 1455], // 14:10-14:55
-      7: [1505, 1550], // 15:05-15:50
-      8: [1600, 1645], // 16:00-16:45
+      1: [825, 915],   // 08:25-09:15
+      2: [915, 1005],  // 09:15-10:05
+      3: [1015, 1105], // 10:15-11:05
+      4: [1105, 1155], // 11:05-11:55
+      5: [1325, 1415], // 13:25-14:15
+      6: [1415, 1505], // 14:15-15:05
+      7: [1515, 1605], // 15:15-16:05
+      8: [1605, 1655], // 16:05-16:55
     }
 
     const periodTimes = times[period as keyof typeof times]

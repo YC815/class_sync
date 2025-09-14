@@ -4,6 +4,7 @@ import { useState, useEffect, useRef, useCallback } from 'react'
 import { useSession, signOut, signIn } from 'next-auth/react'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Button } from '@/components/ui/button'
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import ScheduleTable from '@/components/schedule/ScheduleTable'
 import ScheduleTableSkeleton from '@/components/schedule/ScheduleTableSkeleton'
 import MobileDayView from '@/components/schedule/MobileDayView'
@@ -14,6 +15,7 @@ import CourseManagerSkeleton from '@/components/courses/CourseManagerSkeleton'
 import RoomManager from '@/components/rooms/RoomManager'
 import RoomManagerSkeleton from '@/components/rooms/RoomManagerSkeleton'
 import UserAccountDropdown from '@/components/auth/UserAccountDropdown'
+import BaseViewDialog from '@/components/base/BaseViewDialog'
 import { WeekSchedule, Course, Base, ScheduleEvent, ScheduleCell } from '@/lib/types'
 import { getWeekStart, initializeEmptyScheduleWithWeekends } from '@/lib/schedule-utils'
 import { useNavbarHeight } from '@/lib/hooks'
@@ -49,6 +51,9 @@ export default function Home() {
   const [showSyncErrorToast, setShowSyncErrorToast] = useState(false)
   const [pendingChanges, setPendingChanges] = useState<WeekSchedule | null>(null)
   const [isPreventingReload, setIsPreventingReload] = useState(false)
+  const [showMapDialog, setShowMapDialog] = useState(false)
+  const [selectedFloor, setSelectedFloor] = useState<'4f' | '5f' | null>(null)
+  const [showBaseViewDialog, setShowBaseViewDialog] = useState(false)
 
   // Initialize currentWeek on client side to avoid hydration mismatch
   useEffect(() => {
@@ -609,9 +614,94 @@ export default function Home() {
             </div>
             
             <div className="flex items-center space-x-2 md:space-x-4">
+              {/* Google Sheets Button */}
+              <Button
+                variant="outline"
+                size="sm"
+                className="hidden sm:inline-flex"
+                asChild
+              >
+                <a
+                  href="https://docs.google.com/spreadsheets/d/1scxvMRoDHDc_ubV6fWd0rOcHpFzwMESrBmOtoHiezPc/edit?gid=0#gid=0"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="gap-2"
+                >
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                  </svg>
+                  基礎課表
+                </a>
+              </Button>
+
+
+              {/* Jilin Base Map Dropdown */}
+              <div className="relative group hidden sm:block">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="gap-2"
+                >
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
+                  </svg>
+                  吉林基地地圖
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                  </svg>
+                </Button>
+
+                <div className="absolute right-0 mt-2 w-80 bg-white rounded-md shadow-lg border opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all duration-200 z-10">
+                  <div className="p-4 space-y-4">
+                    <div className="text-sm font-medium text-gray-900 border-b pb-2">吉林基地地圖</div>
+
+                    {/* Floor plans */}
+                    <div className="space-y-3">
+                      <div>
+                        <h4 className="text-sm font-medium text-gray-700 mb-2">樓層平面圖</h4>
+                        <div className="space-y-2">
+                          <button
+                            className="w-full text-left p-2 rounded hover:bg-gray-50 text-sm"
+                            onClick={() => {
+                              setSelectedFloor('4f')
+                              setShowMapDialog(true)
+                            }}
+                          >
+                            四樓平面圖
+                          </button>
+                          <button
+                            className="w-full text-left p-2 rounded hover:bg-gray-50 text-sm"
+                            onClick={() => {
+                              setSelectedFloor('5f')
+                              setShowMapDialog(true)
+                            }}
+                          >
+                            五樓平面圖
+                          </button>
+                        </div>
+                      </div>
+
+                      {/* Notes */}
+                      <div className="border-t pt-3">
+                        <h4 className="text-sm font-medium text-gray-700 mb-2">重要提醒</h4>
+                        <div className="space-y-1 text-xs text-gray-600">
+                          <div>• 移動力教室靠近辦公室</div>
+                          <div>• 學生圖像教室：移動力＋影響力＋學習力</div>
+                          <div>• 創造力坊在五樓電梯旁</div>
+                          <div>• 跨域合作坊在四樓辦公室旁</div>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
               <UserAccountDropdown
                 onTestReset={handleTestReset}
+                onRecover={currentWeek ? () => manualRecovery(currentWeek) : undefined}
                 isResetting={isResetting}
+                isLoading={isLoading}
               />
             </div>
           </div>
@@ -734,7 +824,7 @@ export default function Home() {
               <FloatingSyncButton
                 onPreview={handlePreview}
                 onSync={handleSync}
-                onRecover={currentWeek ? () => manualRecovery(currentWeek) : undefined}
+                onBaseView={() => setShowBaseViewDialog(true)}
                 previewChanges={previewChanges}
                 isLoading={isLoading}
               />
@@ -757,11 +847,55 @@ export default function Home() {
           {isLoadingBases ? (
             <RoomManagerSkeleton />
           ) : (
-            <RoomManager />
+            <RoomManager
+              bases={bases}
+              onBasesChange={setBases}
+            />
           )}
         </TabsContent>
         </Tabs>
       </main>
+
+      {/* Map Dialog */}
+      <Dialog open={showMapDialog} onOpenChange={setShowMapDialog}>
+        <DialogContent className="w-[70vw] h-[70vh] p-4">
+          <DialogHeader className="pb-4">
+            <DialogTitle className="text-center">
+              {selectedFloor === '4f' ? '吉林基地-四樓' : selectedFloor === '5f' ? '吉林基地-五樓' : ''}平面圖
+            </DialogTitle>
+          </DialogHeader>
+          <div className="flex justify-center items-center h-[calc(100%-60px)] overflow-auto">
+            {selectedFloor && (
+              <img
+                src={`/JilinMap/${selectedFloor}.png`}
+                alt={`${selectedFloor === '4f' ? '四樓' : '五樓'}平面圖`}
+                className="w-full h-full object-contain cursor-zoom-in"
+                onClick={(e) => {
+                  if (e.currentTarget.style.transform === 'scale(1.5)') {
+                    e.currentTarget.style.transform = 'scale(1)'
+                    e.currentTarget.style.cursor = 'zoom-in'
+                  } else {
+                    e.currentTarget.style.transform = 'scale(1.5)'
+                    e.currentTarget.style.cursor = 'zoom-out'
+                  }
+                }}
+                style={{ transition: 'transform 0.2s ease' }}
+              />
+            )}
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Base View Dialog */}
+      {currentWeek && (
+        <BaseViewDialog
+          open={showBaseViewDialog}
+          onOpenChange={setShowBaseViewDialog}
+          bases={bases}
+          schedule={schedule}
+          currentWeek={currentWeek}
+        />
+      )}
     </div>
   )
 }

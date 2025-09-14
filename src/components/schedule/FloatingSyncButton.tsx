@@ -5,13 +5,13 @@ import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog'
-import { Calendar, Plus, Minus, Loader2, ExternalLink, Check, X, AlertCircle, RefreshCw } from 'lucide-react'
+import { Calendar, Plus, Minus, Loader2, ExternalLink, Check, X, AlertCircle } from 'lucide-react'
 import { ScheduleEvent } from '@/lib/types'
 
 interface FloatingSyncButtonProps {
   onPreview: () => void | Promise<void>
   onSync: () => Promise<{ syncedEvents: number; deletedEvents: number; message: string }>
-  onRecover?: () => Promise<void>
+  onBaseView?: () => void
   previewChanges?: {
     create: ScheduleEvent[]
     update: ScheduleEvent[]
@@ -23,7 +23,7 @@ interface FloatingSyncButtonProps {
 export default function FloatingSyncButton({
   onPreview,
   onSync,
-  onRecover,
+  onBaseView,
   previewChanges,
   isLoading = false
 }: FloatingSyncButtonProps) {
@@ -71,16 +71,18 @@ export default function FloatingSyncButton({
       {/* 浮動按鈕組 - 固定於底部中央，支援 safe-area */}
       <div className="fixed bottom-6 left-1/2 transform -translate-x-1/2 z-40 pb-safe">
         <div className="flex gap-3">
-          {onRecover && (
+          {onBaseView && (
             <Button
-              onClick={() => onRecover()}
+              onClick={onBaseView}
               disabled={isLoading}
               className="gap-2 px-4 py-3 h-12 text-sm font-medium shadow-lg hover:shadow-xl transition-all duration-200 bg-green-600 hover:bg-green-700 backdrop-blur-sm"
               size="lg"
               variant="default"
             >
-              <RefreshCw className="w-4 h-4" />
-              恢復事件
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
+              </svg>
+              檢視基地
             </Button>
           )}
           <Button

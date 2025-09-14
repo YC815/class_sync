@@ -1,6 +1,6 @@
 'use client'
 
-import React, { useState, useEffect } from 'react'
+import React, { useState, useEffect, useCallback } from 'react'
 import { 
   Table, 
   TableBody, 
@@ -13,13 +13,23 @@ import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
-import { 
+import {
   Dialog,
   DialogContent,
   DialogHeader,
   DialogTitle,
   DialogTrigger,
 } from '@/components/ui/dialog'
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog'
 import {
   Select,
   SelectContent,
@@ -32,14 +42,35 @@ import { Base } from '@/lib/types'
 import { useSession } from 'next-auth/react'
 import { toast } from 'sonner'
 
-export default function RoomManager() {
+interface RoomManagerProps {
+  bases: Base[]
+  onBasesChange: (bases: Base[]) => void
+  initialLoading?: boolean
+  onLoadingChange?: (loading: boolean) => void
+  refreshInterval?: number
+}
+
+const RoomManager = React.forwardRef<
+  { refreshBases: () => Promise<void> },
+  RoomManagerProps
+>(({
+  bases,
+  onBasesChange,
+  initialLoading = false,
+  onLoadingChange,
+  refreshInterval
+}, ref) => {
   const { data: session } = useSession()
-  const [bases, setBases] = useState<Base[]>([])
   const [isDialogOpen, setIsDialogOpen] = useState(false)
   const [editingBase, setEditingBase] = useState<Base | null>(null)
-  const [isLoading, setIsLoading] = useState(false)
+  const [isLoading, setIsLoading] = useState(initialLoading)
   const [editingRoomId, setEditingRoomId] = useState<string | null>(null)
   const [editingRoomName, setEditingRoomName] = useState('')
+  const [showDeleteBaseDialog, setShowDeleteBaseDialog] = useState(false)
+  const [showDeleteRoomDialog, setShowDeleteRoomDialog] = useState(false)
+  const [baseToDelete, setBaseToDelete] = useState<string | null>(null)
+  const [roomToDelete, setRoomToDelete] = useState<{id: string, name: string} | null>(null)
+  const [userIsInteracting, setUserIsInteracting] = useState(false)
   const [formData, setFormData] = useState({
     name: '',
     address: '',
@@ -49,56 +80,70 @@ export default function RoomManager() {
   })
   const [currentRoomInput, setCurrentRoomInput] = useState('')
 
-  // 載入基地資料
-  useEffect(() => {
-    console.log('🔧 [RoomManager] useEffect triggered, session user ID:', session?.user?.id)
-    if (session?.user?.id) {
-      console.log('👤 [RoomManager] User authenticated, calling loadBases')
-      loadBases()
-    } else {
-      console.log('❌ [RoomManager] No authenticated user, skipping loadBases')
+  // 更新loading狀態
+  const updateLoading = useCallback((loading: boolean) => {
+    setIsLoading(loading)
+    onLoadingChange?.(loading)
+  }, [onLoadingChange])
+
+  // 刷新基地資料的回調函數
+  const refreshBases = useCallback(async (showLoading = true) => {
+    console.log('🔄 [RoomManager] refreshBases called')
+    if (showLoading) {
+      updateLoading(true)
     }
-  }, [session])
-
-  const loadBases = async () => {
-    console.log('📡 [RoomManager] loadBases called')
     try {
-      console.log('🚀 [RoomManager] Fetching /api/bases')
       const response = await fetch('/api/bases')
-      console.log(`📊 [RoomManager] Response status: ${response.status} ${response.statusText}`)
-
       if (response.ok) {
         const data = await response.json()
-
-        // Handle new response format with debug info
-        const bases = data.bases || data  // Support both old and new format
-        const debug = data.debug
-
-        console.log(`✅ [RoomManager] Received ${bases.length} bases from API:`)
-        if (debug) {
-          console.log(`🐛 [RoomManager] Debug info:`, debug)
-        }
-
-        bases.forEach((base: Base, index: number) => {
-          console.log(`  ${index + 1}. ${base.name} (${base.rooms?.length || 0} rooms)`)
-        })
-
-        setBases(bases)
-        console.log('📝 [RoomManager] setBases called with new data')
-      } else {
-        console.error('❌ [RoomManager] API request failed:', response.status, response.statusText)
+        const bases = data.bases || data
+        console.log(`✅ [RoomManager] Received ${bases.length} bases from refresh`)
+        onBasesChange(bases)
+        return bases
       }
     } catch (error) {
-      console.error('❌ [RoomManager] Failed to load bases:', error)
+      console.error('❌ [RoomManager] Failed to refresh bases:', error)
+    } finally {
+      if (showLoading) {
+        updateLoading(false)
+      }
     }
-  }
+  }, [onBasesChange, updateLoading])
+
+  // 自動刷新功能 - 只在用戶未進行操作時執行
+  useEffect(() => {
+    if (refreshInterval && refreshInterval > 0) {
+      const interval = setInterval(() => {
+        // 只在用戶未進行互動、沒有對話框開啟、沒有編輯狀態時刷新
+        if (!userIsInteracting && !isDialogOpen && !editingRoomId && !showDeleteBaseDialog && !showDeleteRoomDialog) {
+          refreshBases(false) // 自動刷新時不顯示loading
+        }
+      }, refreshInterval)
+
+      return () => clearInterval(interval)
+    }
+  }, [refreshInterval, refreshBases, userIsInteracting, isDialogOpen, editingRoomId, showDeleteBaseDialog, showDeleteRoomDialog])
+
+  // 監聽bases的變化來更新內部狀態
+  useEffect(() => {
+    if (initialLoading !== isLoading) {
+      setIsLoading(initialLoading)
+    }
+  }, [initialLoading, isLoading])
+
+  // 將刷新功能暴露給父組件
+  React.useImperativeHandle(ref, () => ({
+    refreshBases: () => refreshBases(true)
+  }), [refreshBases])
+
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
-    
+
     if (!formData.name.trim() || !session?.user?.id) return
-    
-    setIsLoading(true)
+
+    setUserIsInteracting(true)
+    updateLoading(true)
     
     try {
       const baseData = {
@@ -132,7 +177,7 @@ export default function RoomManager() {
         throw new Error('Failed to save base')
       }
 
-      await loadBases() // 重新載入資料
+      await refreshBases(false) // 重新載入資料，不顯示loading
       toast.success(editingBase ? '基地已更新' : '基地已新增')
       resetForm()
       setIsDialogOpen(false)
@@ -140,7 +185,8 @@ export default function RoomManager() {
       console.error('Failed to save base:', error)
       toast.error('儲存失敗，請稍後再試')
     } finally {
-      setIsLoading(false)
+      updateLoading(false)
+      setUserIsInteracting(false)
     }
   }
 
@@ -159,11 +205,16 @@ export default function RoomManager() {
     setIsDialogOpen(true)
   }
 
-  const handleDelete = async (baseId: string) => {
-    if (!confirm('確定要刪除這個基地嗎？所有相關教室也會被刪除。')) return
-    
+  const handleDelete = (baseId: string) => {
+    setBaseToDelete(baseId)
+    setShowDeleteBaseDialog(true)
+  }
+
+  const confirmDeleteBase = async () => {
+    if (!baseToDelete) return
+
     try {
-      const response = await fetch(`/api/bases/${baseId}`, {
+      const response = await fetch(`/api/bases/${baseToDelete}`, {
         method: 'DELETE',
       })
 
@@ -171,8 +222,10 @@ export default function RoomManager() {
         throw new Error('Failed to delete base')
       }
 
-      await loadBases()
+      await refreshBases(false)
       toast.success('基地已刪除')
+      setShowDeleteBaseDialog(false)
+      setBaseToDelete(null)
     } catch (error) {
       console.error('Failed to delete base:', error)
       toast.error('刪除失敗，請稍後再試')
@@ -240,7 +293,7 @@ export default function RoomManager() {
         throw new Error('Failed to update room name')
       }
 
-      await loadBases() // 重新載入資料
+      await refreshBases(false) // 重新載入資料
       toast.success('教室名稱已更新')
       setEditingRoomId(null)
       setEditingRoomName('')
@@ -251,11 +304,16 @@ export default function RoomManager() {
   }
 
   // 刪除教室
-  const deleteRoom = async (roomId: string, roomName: string) => {
-    if (!confirm(`確定要刪除教室「${roomName}」嗎？`)) return
+  const deleteRoom = (roomId: string, roomName: string) => {
+    setRoomToDelete({id: roomId, name: roomName})
+    setShowDeleteRoomDialog(true)
+  }
+
+  const confirmDeleteRoom = async () => {
+    if (!roomToDelete) return
 
     try {
-      const response = await fetch(`/api/rooms/${roomId}`, {
+      const response = await fetch(`/api/rooms/${roomToDelete.id}`, {
         method: 'DELETE',
       })
 
@@ -263,8 +321,10 @@ export default function RoomManager() {
         throw new Error('Failed to delete room')
       }
 
-      await loadBases()
+      await refreshBases(false)
       toast.success('教室已刪除')
+      setShowDeleteRoomDialog(false)
+      setRoomToDelete(null)
     } catch (error) {
       console.error('Failed to delete room:', error)
       toast.error('刪除失敗，請稍後再試')
@@ -298,6 +358,8 @@ export default function RoomManager() {
                   id="name"
                   value={formData.name}
                   onChange={(e) => setFormData(prev => ({ ...prev, name: e.target.value }))}
+                  onFocus={() => setUserIsInteracting(true)}
+                  onBlur={() => setUserIsInteracting(false)}
                   placeholder="例如：弘道基地、吉林基地、線上、其他"
                   required
                 />
@@ -309,6 +371,8 @@ export default function RoomManager() {
                   id="address"
                   value={formData.address}
                   onChange={(e) => setFormData(prev => ({ ...prev, address: e.target.value }))}
+                  onFocus={() => setUserIsInteracting(true)}
+                  onBlur={() => setUserIsInteracting(false)}
                   placeholder="基地地址（選填）"
                 />
               </div>
@@ -319,6 +383,8 @@ export default function RoomManager() {
                   id="placeId"
                   value={formData.placeId}
                   onChange={(e) => setFormData(prev => ({ ...prev, placeId: e.target.value }))}
+                  onFocus={() => setUserIsInteracting(true)}
+                  onBlur={() => setUserIsInteracting(false)}
                   placeholder="Google Places API ID（選填）"
                 />
               </div>
@@ -393,6 +459,8 @@ export default function RoomManager() {
                               setCurrentRoomInput(value);
                             }
                           }}
+                          onFocus={() => setUserIsInteracting(true)}
+                          onBlur={() => setUserIsInteracting(false)}
                           placeholder="輸入新教室名稱..."
                           className="flex-1"
                           onCompositionStart={(e) => {
@@ -519,6 +587,8 @@ export default function RoomManager() {
                                 <Input
                                   value={editingRoomName}
                                   onChange={(e) => setEditingRoomName(e.target.value)}
+                                  onFocus={() => setUserIsInteracting(true)}
+                                  onBlur={() => setUserIsInteracting(false)}
                                   onKeyDown={(e) => {
                                     if (e.key === 'Enter') {
                                       saveRoomName(room.id)
@@ -596,7 +666,7 @@ export default function RoomManager() {
             </CardContent>
           </Card>
         ))}
-        
+
         {bases.length === 0 && (
           <Card>
             <CardContent className="text-center py-12">
@@ -606,6 +676,46 @@ export default function RoomManager() {
           </Card>
         )}
       </div>
+
+      {/* Delete Base Confirmation Dialog */}
+      <AlertDialog open={showDeleteBaseDialog} onOpenChange={setShowDeleteBaseDialog}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>確認刪除基地</AlertDialogTitle>
+            <AlertDialogDescription>
+              確定要刪除這個基地嗎？所有相關教室也會被刪除。此操作無法復原。
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>取消</AlertDialogCancel>
+            <AlertDialogAction onClick={confirmDeleteBase} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
+              確認刪除
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* Delete Room Confirmation Dialog */}
+      <AlertDialog open={showDeleteRoomDialog} onOpenChange={setShowDeleteRoomDialog}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>確認刪除教室</AlertDialogTitle>
+            <AlertDialogDescription>
+              確定要刪除教室「{roomToDelete?.name}」嗎？此操作無法復原。
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>取消</AlertDialogCancel>
+            <AlertDialogAction onClick={confirmDeleteRoom} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
+              確認刪除
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   )
-}
+})
+
+RoomManager.displayName = 'RoomManager'
+
+export default RoomManager

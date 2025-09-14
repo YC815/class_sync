@@ -1,6 +1,6 @@
 'use client'
 
-import React, { useState } from 'react'
+import React, { useState, useEffect } from 'react'
 import { 
   Table, 
   TableBody, 
@@ -52,6 +52,7 @@ export default function ScheduleTable({
     day: 0,
     period: 0
   })
+
 
   // Calculate dates for each weekday (including weekends)
   const getWeekdayDates = () => {
@@ -130,6 +131,7 @@ export default function ScheduleTable({
       }
       return
     }
+
 
     const course = courses.find(c => c.id === courseId)
     if (course) {
@@ -356,7 +358,14 @@ export default function ScheduleTable({
                       }`}>
                         <div className="space-y-1 h-full flex flex-col justify-start">
                           <Select
-                            value={cell?.isContinuation ? 'continuation' : (cell?.courseId || (cell?.isTemporary ? 'temp' : 'none'))}
+                            value={(() => {
+                              if (cell?.isContinuation) return 'continuation'
+                              if (cell?.courseId) return cell.courseId
+                              if (cell?.isTemporary && cell?.courseName) {
+                                return 'temp'
+                              }
+                              return 'none'
+                            })()}
                             onValueChange={(value) => handleCourseSelect(day, period, value)}
                           >
                             <SelectTrigger className={`w-full h-auto min-h-8 text-xs items-start ${
@@ -379,14 +388,14 @@ export default function ScheduleTable({
                                 const isEvenPeriod = period % 2 === 0
                                 const previousPeriod = period - 1
                                 const previousCell = schedule[day]?.[previousPeriod]
-                                
+
                                 if (isEvenPeriod && previousCell) {
-                                  const previousCourseName = previousCell.courseName || 
-                                    courses.find(c => c.id === previousCell.courseId)?.name || 
+                                  const previousCourseName = previousCell.courseName ||
+                                    courses.find(c => c.id === previousCell.courseId)?.name ||
                                     '未知課程'
                                   return (
-                                    <SelectItem 
-                                      value="continuation" 
+                                    <SelectItem
+                                      value="continuation"
                                       className="text-orange-600 font-medium"
                                     >
                                       連堂（{previousCourseName}）
