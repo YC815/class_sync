@@ -27,7 +27,7 @@ function InstructionStepper({ file }: InstructionStepperProps) {
         const res = await fetch(file)
         if (!res.ok) throw new Error('Failed to fetch')
         const data = (await res.json()) as InstructionStep[]
-        // 確保資料格式正確
+        // 基本格式防呆
         const sanitized = Array.isArray(data)
           ? data.filter(
               (s): s is InstructionStep =>
@@ -75,7 +75,7 @@ function InstructionStepper({ file }: InstructionStepperProps) {
                 </ul>
               )}
               {step.image && (
-                // 如需 Next Image，可改成 <Image />；這裡保持相容性用 <img>
+                // 若需 Next.js <Image>，可自行替換；此處以 <img> 保持簡單相容
                 <img src={step.image} alt={step.title} className="mt-2 max-w-full rounded" />
               )}
             </>
