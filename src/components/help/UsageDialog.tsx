@@ -34,7 +34,7 @@ function MarkdownStepper({ file }: MarkdownStepperProps) {
 
   return (
     <div className="flex flex-col gap-4">
-      <div className="prose prose-sm max-w-none">
+      <div className="prose max-w-none prose-h1:font-bold prose-h1:text-xl prose-h1:mb-4 prose-ul:list-disc prose-ul:pl-5">
         <ReactMarkdown>{steps[index] || ''}</ReactMarkdown>
       </div>
       {steps.length > 1 && (
