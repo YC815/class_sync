@@ -688,13 +688,10 @@ export default function Home() {
         <TabsContent value="schedule" className="space-y-6">
           {currentWeek && (
             <>
-              <WeekNavigation 
+              <WeekNavigation
                 currentWeek={currentWeek}
                 onWeekChange={(newWeek) => {
                   setCurrentWeek(newWeek)
-                }}
-                onScheduleUpdated={(newSchedule) => {
-                  setSchedule(newSchedule)
                 }}
               />
               
