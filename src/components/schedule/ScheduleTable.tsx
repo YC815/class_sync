@@ -70,7 +70,24 @@ export default function ScheduleTable({
   // Weekend initialization is now handled at the parent level to prevent flickers
   const updateCell = (day: number, period: number, data: ScheduleCell | null) => {
     const newSchedule = { ...schedule }
+    if (!newSchedule[day]) {
+      newSchedule[day] = {}
+    }
     newSchedule[day] = { ...newSchedule[day], [period]: data }
+    onScheduleChange(newSchedule)
+  }
+
+  // 新增一個批次更新函數，可以同時更新多個 cell
+  const updateMultipleCells = (updates: Array<{ day: number, period: number, data: ScheduleCell | null }>) => {
+    const newSchedule = { ...schedule }
+
+    updates.forEach(({ day, period, data }) => {
+      if (!newSchedule[day]) {
+        newSchedule[day] = {}
+      }
+      newSchedule[day] = { ...newSchedule[day], [period]: data }
+    })
+
     onScheduleChange(newSchedule)
   }
 
@@ -135,23 +152,38 @@ export default function ScheduleTable({
 
     const course = courses.find(c => c.id === courseId)
     if (course) {
-      updateCell(day, period, {
-        courseId: course.id,
-        courseName: course.name,
-        url: course.links?.[0]?.url,
-        base: undefined, // 重設基地選擇
-        room: undefined, // 重設教室選擇
-        isSynced: false, // 新選擇的課程標記為未同步
-        calendarEventId: undefined
-      })
+      const currentCell = schedule[day]?.[period]
+      const updates: Array<{ day: number, period: number, data: ScheduleCell | null }> = [
+        {
+          day,
+          period,
+          data: {
+            courseId: course.id,
+            courseName: course.name,
+            url: course.links?.[0]?.url,
+            base: currentCell?.base, // 保持基地選擇不變
+            room: currentCell?.room, // 保持教室選擇不變
+            placeId: currentCell?.placeId,
+            address: currentCell?.address,
+            isSynced: false, // 新選擇的課程標記為未同步
+            calendarEventId: undefined
+          }
+        }
+      ]
 
       // 如果是奇數節次且下一節是連堂，清除下一節
       const isOddPeriod = period % 2 === 1
       const nextPeriod = period + 1
       const nextCell = schedule[day]?.[nextPeriod]
       if (isOddPeriod && nextCell?.isContinuation) {
-        updateCell(day, nextPeriod, null)
+        updates.push({
+          day,
+          period: nextPeriod,
+          data: null
+        })
       }
+
+      updateMultipleCells(updates)
     }
   }
 
@@ -161,43 +193,67 @@ export default function ScheduleTable({
 
     const base = bases.find(b => b.id === baseId)
 
-    updateCell(day, period, {
-      ...currentCell,
-      base: baseId === 'none' ? undefined : base?.name,
-      room: undefined, // 重設教室選擇
-      placeId: baseId === 'none' ? undefined : base?.placeId,
-      address: baseId === 'none' ? undefined : base?.address,
-      isSynced: false, // 基地變更標記為未同步
-      calendarEventId: undefined
-    })
+    const updates: Array<{ day: number, period: number, data: ScheduleCell | null }> = [
+      {
+        day,
+        period,
+        data: {
+          ...currentCell,
+          base: baseId === 'none' ? undefined : base?.name,
+          room: undefined, // 重設教室選擇
+          placeId: baseId === 'none' ? undefined : base?.placeId,
+          address: baseId === 'none' ? undefined : base?.address,
+          isSynced: false, // 基地變更標記為未同步
+          calendarEventId: undefined
+        }
+      }
+    ]
 
     // 如果是奇數節次且下一節是連堂，清除下一節
     const isOddPeriod = period % 2 === 1
     const nextPeriod = period + 1
     const nextCell = schedule[day]?.[nextPeriod]
     if (isOddPeriod && nextCell?.isContinuation) {
-      updateCell(day, nextPeriod, null)
+      updates.push({
+        day,
+        period: nextPeriod,
+        data: null
+      })
     }
+
+    updateMultipleCells(updates)
   }
 
   const handleRoomSelect = (day: number, period: number, room: string) => {
     const currentCell = schedule[day]?.[period]
     if (!currentCell) return
 
-    updateCell(day, period, {
-      ...currentCell,
-      room: room === 'none' ? undefined : room,
-      isSynced: false, // 教室變更標記為未同步
-      calendarEventId: undefined
-    })
+    const updates: Array<{ day: number, period: number, data: ScheduleCell | null }> = [
+      {
+        day,
+        period,
+        data: {
+          ...currentCell,
+          room: room === 'none' ? undefined : room,
+          isSynced: false, // 教室變更標記為未同步
+          calendarEventId: undefined
+        }
+      }
+    ]
 
     // 如果是奇數節次且下一節是連堂，清除下一節
     const isOddPeriod = period % 2 === 1
     const nextPeriod = period + 1
     const nextCell = schedule[day]?.[nextPeriod]
     if (isOddPeriod && nextCell?.isContinuation) {
-      updateCell(day, nextPeriod, null)
+      updates.push({
+        day,
+        period: nextPeriod,
+        data: null
+      })
     }
+
+    updateMultipleCells(updates)
   }
 
   const handleAddTempCourse = (courseName: string) => {
@@ -211,14 +267,6 @@ export default function ScheduleTable({
       isSynced: false, // 臨時課程標記為未同步
       calendarEventId: undefined
     })
-
-    // 如果是奇數節次且下一節是連堂，清除下一節
-    const isOddPeriod = period % 2 === 1
-    const nextPeriod = period + 1
-    const nextCell = schedule[day]?.[nextPeriod]
-    if (isOddPeriod && nextCell?.isContinuation) {
-      updateCell(day, nextPeriod, null)
-    }
   }
 
   // 檢查半天基地衝突（桌機用）
