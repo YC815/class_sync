@@ -50,10 +50,10 @@ export default function FloatingSyncButton({
 
   return (
     <>
-      {/* 圓形漢堡菜單按鈕 - 固定於右下角，支援 safe-area */}
-      <div className="fixed bottom-6 right-6 z-40 pb-safe pr-safe">
+      {/* Mobile View: Hamburger menu in the bottom-right corner */}
+      <div className="md:hidden fixed bottom-6 right-6 z-40 pb-safe pr-safe">
         <div className="relative">
-          {/* 展開的菜單選項 */}
+          {/* Expanded menu options */}
           <div className={`absolute bottom-0 right-16 space-y-3 mr-2 transition-all duration-300 ease-in-out transform origin-bottom-right ${
             showMenu
               ? 'opacity-100 scale-100 translate-x-0'
@@ -68,7 +68,7 @@ export default function FloatingSyncButton({
                 </div>
                 <Button
                   onClick={() => {
-                    onBaseView()
+                    if (onBaseView) onBaseView()
                     setShowMenu(false)
                   }}
                   disabled={isLoading}
@@ -105,7 +105,7 @@ export default function FloatingSyncButton({
             </div>
           </div>
 
-          {/* 主漢堡菜單按鈕 */}
+          {/* Main hamburger menu button */}
           <Button
             onClick={() => setShowMenu(!showMenu)}
             className="w-14 h-14 rounded-full shadow-lg hover:shadow-xl transition-[colors,box-shadow] duration-300 ease-in-out bg-gray-900 hover:bg-gray-800 active:translate-y-0 p-0"
@@ -122,13 +122,43 @@ export default function FloatingSyncButton({
         </div>
       </div>
 
-      {/* 點擊外部關閉菜單 */}
+      {/* Click outside to close menu (for mobile) */}
       {showMenu && (
         <div
-          className="fixed inset-0 z-30"
+          className="fixed inset-0 z-30 md:hidden"
           onClick={() => setShowMenu(false)}
         />
       )}
+
+      {/* Desktop View: Centered, expanded buttons */}
+      <div className="hidden md:flex fixed bottom-6 left-1/2 -translate-x-1/2 z-40 pb-safe items-center justify-center gap-4">
+        {onBaseView && (
+          <Button
+            onClick={onBaseView}
+            disabled={isLoading}
+            className="h-12 rounded-full shadow-lg hover:shadow-xl transition-transform duration-300 bg-green-600 hover:bg-green-700 hover:scale-105 gap-2 px-6"
+            size="lg"
+          >
+            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
+            </svg>
+            檢視基地
+          </Button>
+        )}
+        <Button
+          onClick={handleSyncClick}
+          disabled={isLoading}
+          className="h-12 rounded-full shadow-lg hover:shadow-xl transition-transform duration-300 bg-blue-600 hover:bg-blue-700 hover:scale-105 gap-2 px-6"
+          size="lg"
+        >
+          {isLoading ? (
+            <Loader2 className="w-5 h-5 animate-spin" />
+          ) : (
+            <Calendar className="w-5 h-5" />
+          )}
+          同步到 Google Calendar
+        </Button>
+      </div>
 
       {/* 同步對話框 */}
       <Dialog open={showDialog} onOpenChange={setShowDialog}>
