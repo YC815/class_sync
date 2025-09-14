@@ -16,7 +16,7 @@ import RoomManager from '@/components/rooms/RoomManager'
 import RoomManagerSkeleton from '@/components/rooms/RoomManagerSkeleton'
 import UserAccountDropdown from '@/components/auth/UserAccountDropdown'
 import BaseViewDialog from '@/components/base/BaseViewDialog'
-import { WeekSchedule, Course, Base, ScheduleEvent, ScheduleCell } from '@/lib/types'
+import { WeekSchedule, Course, Base, ScheduleCell } from '@/lib/types'
 import { getWeekStart, initializeEmptyScheduleWithWeekends } from '@/lib/schedule-utils'
 import { useNavbarHeight } from '@/lib/hooks'
 import { toast } from 'sonner'
@@ -35,11 +35,6 @@ export default function Home() {
   const [schedule, setSchedule] = useState<WeekSchedule>(initializeEmptyScheduleWithWeekends())
   const [courses, setCourses] = useState<Course[]>([])
   const [bases, setBases] = useState<Base[]>([])
-  const [previewChanges, setPreviewChanges] = useState<{
-    create: ScheduleEvent[]
-    update: ScheduleEvent[]
-    delete: string[]
-  }>()
   const [isLoading, setIsLoading] = useState(false)
   const [isLoadingSchedule, setIsLoadingSchedule] = useState(false)
   const [isLoadingCourses, setIsLoadingCourses] = useState(false)
@@ -331,87 +326,65 @@ export default function Home() {
     }
   }, [syncError, showSyncErrorToast, isLoading, currentWeek, loadWeekSchedule, manualRecovery])
 
-  const handlePreview = async () => {
-    if (!currentWeek) {
-      console.log('🚫 [Preview] No current week selected')
-      return
-    }
-    
-    const weekStartStr = formatDateLocal(currentWeek)
-    console.log('🔍 [Preview] Starting preview for week:', weekStartStr)
-    console.log('🔍 [Preview] Current schedule data:', schedule)
-    
-    setIsLoading(true)
-    try {
-      const requestBody = {
-        scheduleData: schedule,
-        currentLocation: '' // TODO: Add default location management if needed
-      }
-      console.log('🔍 [Preview] Sending request with body:', requestBody)
-      
-      const response = await fetch(`/api/weeks/${weekStartStr}/preview`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(requestBody),
-      })
-
-      console.log('🔍 [Preview] Response status:', response.status)
-
-      if (response.status === 401) {
-        toast.error('登入逾期，請重新登入')
-        await signOut()
-        return
-      }
-
-      if (!response.ok) {
-        const errorText = await response.text()
-        console.error('🔍 [Preview] Response error:', errorText)
-        throw new Error('Preview failed')
-      }
-
-      const data = await response.json()
-      console.log('🔍 [Preview] Preview response data:', data)
-      setPreviewChanges(data.changes)
-    } catch (error) {
-      console.error('❌ [Preview] Preview failed:', error)
-      toast.error('預覽失敗，請檢查登入狀態並重試')
-    } finally {
-      setIsLoading(false)
-    }
-  }
 
   const handleSync = async (): Promise<{ syncedEvents: number; deletedEvents: number; message: string }> => {
-    if (!previewChanges || !currentWeek) {
-      console.log('🚫 [Sync] Missing preview changes or current week')
-      throw new Error('Missing preview changes or current week')
+    if (!currentWeek) {
+      console.log('🚫 [Sync] No current week selected')
+      throw new Error('No current week selected')
     }
-    
+
     const weekStartStr = formatDateLocal(currentWeek)
     console.log('🔄 [Sync] Starting sync for week:', weekStartStr)
-    console.log('🔄 [Sync] Preview changes:', {
-      create: previewChanges.create.length,
-      update: previewChanges.update.length,
-      delete: previewChanges.delete.length
-    })
-    console.log('🔄 [Sync] Events to create/update:', previewChanges.create.concat(previewChanges.update))
-    console.log('🔄 [Sync] Events to delete:', previewChanges.delete)
-    
+    console.log('🔄 [Sync] Current schedule data:', schedule)
+
     setIsLoading(true)
     try {
       // 先保存當前課表資料
       console.log('💾 [Sync] Saving schedule data first')
       await saveScheduleData(weekStartStr, schedule)
-      
-      // 然後同步到 Google Calendar
+
+      // 獲取預覽變更(內部使用)
+      console.log('🔍 [Sync] Getting preview changes internally')
+      const previewRequestBody = {
+        scheduleData: schedule,
+        currentLocation: ''
+      }
+
+      const previewResponse = await fetch(`/api/weeks/${weekStartStr}/preview`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(previewRequestBody),
+      })
+
+      if (previewResponse.status === 401) {
+        toast.error('登入逾期，請重新登入')
+        await signOut()
+        throw new Error('Unauthorized')
+      }
+
+      if (!previewResponse.ok) {
+        throw new Error('Failed to get preview changes')
+      }
+
+      const previewData = await previewResponse.json()
+      const previewChanges = previewData.changes
+
+      console.log('🔄 [Sync] Preview changes:', {
+        create: previewChanges.create.length,
+        update: previewChanges.update.length,
+        delete: previewChanges.delete.length
+      })
+
+      // 同步到 Google Calendar
       const syncRequestBody = {
         events: previewChanges.create.concat(previewChanges.update),
         eventsToDelete: previewChanges.delete
       }
-      
+
       console.log('📅 [Sync] Sending sync request to Google Calendar with body:', syncRequestBody)
-      
+
       const response = await fetch(`/api/weeks/${weekStartStr}/sync`, {
         method: 'POST',
         headers: {
@@ -439,7 +412,6 @@ export default function Home() {
       const data = await response.json()
       console.log('✅ [Sync] Sync successful:', data)
       toast.success(data.message || '同步成功！')
-      setPreviewChanges(undefined)
 
       // 同步成功後，將所有項目標記為已同步
       const updatedSchedule = { ...schedule }
@@ -453,7 +425,6 @@ export default function Home() {
               updatedSchedule[dayNum][periodNum] = {
                 ...cell,
                 isSynced: true
-                // calendarEventId 將在下次載入時從服務器更新
               }
             }
           })
@@ -732,11 +703,9 @@ export default function Home() {
                 currentWeek={currentWeek}
                 onWeekChange={(newWeek) => {
                   setCurrentWeek(newWeek)
-                  setPreviewChanges(undefined) // 清除預覽資料
                 }}
                 onScheduleUpdated={(newSchedule) => {
                   setSchedule(newSchedule)
-                  setPreviewChanges(undefined) // 清除預覽資料
                 }}
               />
               
@@ -766,7 +735,6 @@ export default function Home() {
                       bases={bases}
                       onScheduleChange={(newSchedule) => {
                         setSchedule(newSchedule)
-                        setPreviewChanges(undefined)
                         // 標記有待處理的變更
                         setPendingChanges(newSchedule)
                         setIsPreventingReload(true)
@@ -796,7 +764,6 @@ export default function Home() {
                     courses={courses}
                     onScheduleChange={(newSchedule) => {
                       setSchedule(newSchedule)
-                      setPreviewChanges(undefined)
                       // 標記有待處理的變更
                       setPendingChanges(newSchedule)
                       setIsPreventingReload(true)
@@ -822,10 +789,8 @@ export default function Home() {
               )}
               
               <FloatingSyncButton
-                onPreview={handlePreview}
                 onSync={handleSync}
                 onBaseView={() => setShowBaseViewDialog(true)}
-                previewChanges={previewChanges}
                 isLoading={isLoading}
               />
             </>
