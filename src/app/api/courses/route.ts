@@ -31,7 +31,11 @@ export async function GET() {
       }
     })
 
-    return NextResponse.json(courses)
+    return NextResponse.json(courses, {
+      headers: {
+        'Cache-Control': 'public, max-age=60, stale-while-revalidate=600'
+      }
+    })
   } catch (error) {
     console.error('Failed to fetch courses:', error)
     return NextResponse.json(
@@ -128,11 +132,12 @@ export async function POST(request: NextRequest) {
     console.log('POST /api/courses - Course created successfully:', course.id)
     return NextResponse.json(course, { status: 201 })
   } catch (error) {
+    const prismaError = error as { code?: string; meta?: unknown }
     console.error('POST /api/courses - Error details:', {
       message: error instanceof Error ? error.message : 'Unknown error',
       stack: error instanceof Error ? error.stack : undefined,
-      code: (error as any)?.code,
-      meta: (error as any)?.meta
+      code: prismaError.code,
+      meta: prismaError.meta
     })
     return NextResponse.json(
       { error: 'Internal server error', details: error instanceof Error ? error.message : 'Unknown error' },

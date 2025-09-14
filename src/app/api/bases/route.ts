@@ -80,7 +80,11 @@ export async function GET() {
       }
     }
 
-    return NextResponse.json(response)
+    return NextResponse.json(response, {
+      headers: {
+        'Cache-Control': 'public, max-age=60, stale-while-revalidate=600'
+      }
+    })
   } catch (error) {
     console.error('❌ [BasesAPI] Failed to fetch bases:', error)
     return NextResponse.json(
