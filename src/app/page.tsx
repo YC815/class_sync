@@ -97,7 +97,7 @@ export default function Home() {
     }
   }
 
-  const loadWeekScheduleRef = useRef<(week: Date, skipSyncDeleted?: boolean, preserveLocalChanges?: boolean) => Promise<void>>()
+  const loadWeekScheduleRef = useRef<((week: Date, skipSyncDeleted?: boolean, preserveLocalChanges?: boolean) => Promise<void>) | undefined>(undefined)
 
   loadWeekScheduleRef.current = async (week: Date, skipSyncDeleted = false, preserveLocalChanges = false) => {
     // 如果有待處理的變更，則跳過載入以保護用戶輸入

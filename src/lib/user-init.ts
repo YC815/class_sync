@@ -85,7 +85,7 @@ export async function initializeUserDefaults(userId: string, userInfo?: { name?:
           data: {
             id: userId,
             name: userInfo?.name || 'Unknown User',
-            email: userInfo?.email || null,
+            email: userInfo?.email || '',
             image: userInfo?.image || null,
           }
         })
