@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useRef, useCallback } from 'react'
 import { useSession, signOut, signIn } from 'next-auth/react'
+import useSWR from 'swr'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Button } from '@/components/ui/button'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
@@ -18,6 +19,7 @@ import BaseViewDialog from '@/components/base/BaseViewDialog'
 import { WeekSchedule, Course, Base, ScheduleCell } from '@/lib/types'
 import { getWeekStart, initializeEmptyScheduleWithWeekends } from '@/lib/schedule-utils'
 import { useNavbarHeight } from '@/lib/hooks'
+import { fetcher } from '@/lib/fetcher'
 import { toast } from 'sonner'
 
 
@@ -32,12 +34,16 @@ export default function Home() {
   useNavbarHeight(navbarRef)
   const [currentWeek, setCurrentWeek] = useState<Date | null>(null)
   const [schedule, setSchedule] = useState<WeekSchedule>(initializeEmptyScheduleWithWeekends())
-  const [courses, setCourses] = useState<Course[]>([])
-  const [bases, setBases] = useState<Base[]>([])
+  const { data: courses = [], isLoading: isLoadingCourses, mutate: mutateCourses } = useSWR<Course[]>(
+    session?.user?.id ? '/api/courses' : null,
+    fetcher
+  )
+  const { data: bases = [], isLoading: isLoadingBases, mutate: mutateBases } = useSWR<Base[]>(
+    session?.user?.id ? '/api/bases' : null,
+    fetcher
+  )
   const [isLoading, setIsLoading] = useState(false)
   const [isLoadingSchedule, setIsLoadingSchedule] = useState(false)
-  const [isLoadingCourses, setIsLoadingCourses] = useState(false)
-  const [isLoadingBases, setIsLoadingBases] = useState(false)
   const [activeTab, setActiveTab] = useState('schedule')
   // 週六日一直顯示，不需要狀態管理
   const [isResetting, setIsResetting] = useState(false)
@@ -54,47 +60,6 @@ export default function Home() {
     setCurrentWeek(getWeekStart(new Date()))
   }, [])
 
-  // Load courses and bases when user session is available
-  useEffect(() => {
-    if (session?.user?.id) {
-      loadCourses()
-      loadBases()
-    }
-  }, [session])
-
-  const loadCourses = async () => {
-    setIsLoadingCourses(true)
-    try {
-      const response = await fetch('/api/courses')
-      if (response.ok) {
-        const data = await response.json()
-        setCourses(data)
-      }
-    } catch (error) {
-      console.error('Failed to load courses:', error)
-      toast.error('載入課程失敗')
-    } finally {
-      setIsLoadingCourses(false)
-    }
-  }
-
-  const loadBases = async () => {
-    setIsLoadingBases(true)
-    try {
-      const response = await fetch('/api/bases')
-      if (response.ok) {
-        const data = await response.json()
-        // Handle both array format (old) and object format (new) responses
-        const basesArray = Array.isArray(data) ? data : (data.bases || [])
-        setBases(basesArray)
-      }
-    } catch (error) {
-      console.error('Failed to load bases:', error)
-      toast.error('載入基地失敗')
-    } finally {
-      setIsLoadingBases(false)
-    }
-  }
 
   const loadWeekScheduleRef = useRef<((week: Date, skipSyncDeleted?: boolean, preserveLocalChanges?: boolean) => Promise<void>) | undefined>(undefined)
 
@@ -740,9 +705,9 @@ export default function Home() {
           {isLoadingCourses ? (
             <CourseManagerSkeleton />
           ) : (
-            <CourseManager 
+            <CourseManager
               courses={courses}
-              onCoursesChange={setCourses}
+              onCoursesChange={(newCourses) => mutateCourses(newCourses, false)}
             />
           )}
         </TabsContent>
@@ -753,7 +718,7 @@ export default function Home() {
           ) : (
             <RoomManager
               bases={bases}
-              onBasesChange={setBases}
+              onBasesChange={(newBases) => mutateBases(newBases, false)}
             />
           )}
         </TabsContent>
