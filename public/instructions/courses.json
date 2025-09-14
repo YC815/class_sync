@@ -1,0 +1,31 @@
+[
+  {
+    "title": "步驟 1：瀏覽課程",
+    "bullets": [
+      "在上方選擇「課程庫」分頁查看已建立的課程。"
+    ],
+    "image": "/instructions/courses/step1.png"
+  },
+  {
+    "title": "步驟 2：新增課程",
+    "bullets": [
+      "點擊「新增課程」，輸入課程名稱與連結。",
+      "送出後課程會加入列表。"
+    ],
+    "image": "/instructions/courses/step2.png"
+  },
+  {
+    "title": "步驟 3：編輯課程",
+    "bullets": [
+      "於課程列點擊「編輯」可修改名稱或連結。"
+    ],
+    "image": "/instructions/courses/step3.png"
+  },
+  {
+    "title": "步驟 4：刪除課程",
+    "bullets": [
+      "使用垃圾桶圖示刪除不需要的課程，系統會要求確認。"
+    ],
+    "image": "/instructions/courses/step4.png"
+  }
+]
