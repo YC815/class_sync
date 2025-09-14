@@ -16,11 +16,13 @@ import RoomManager from '@/components/rooms/RoomManager'
 import RoomManagerSkeleton from '@/components/rooms/RoomManagerSkeleton'
 import UserAccountDropdown from '@/components/auth/UserAccountDropdown'
 import BaseViewDialog from '@/components/base/BaseViewDialog'
+import UsageDialog from '@/components/help/UsageDialog'
 import { WeekSchedule, Course, Base, ScheduleCell } from '@/lib/types'
 import { getWeekStart, initializeEmptyScheduleWithWeekends } from '@/lib/schedule-utils'
 import { useNavbarHeight } from '@/lib/hooks'
 import { fetcher } from '@/lib/fetcher'
 import { toast } from 'sonner'
+import { HelpCircle } from 'lucide-react'
 
 
 function formatDateLocal(date: Date): string {
@@ -54,6 +56,7 @@ export default function Home() {
   const [showMapDialog, setShowMapDialog] = useState(false)
   const [selectedFloor, setSelectedFloor] = useState<'4f' | '5f' | null>(null)
   const [showBaseViewDialog, setShowBaseViewDialog] = useState(false)
+  const [showUsageDialog, setShowUsageDialog] = useState(false)
 
   // Initialize currentWeek on client side to avoid hydration mismatch
   useEffect(() => {
@@ -547,8 +550,18 @@ export default function Home() {
                 </TabsList>
               </Tabs>
             </div>
-            
+
             <div className="flex items-center space-x-2 md:space-x-4">
+              <Button
+                variant="outline"
+                size="sm"
+                className="gap-2"
+                onClick={() => setShowUsageDialog(true)}
+              >
+                <HelpCircle className="w-4 h-4" />
+                使用說明
+              </Button>
+
               {/* Google Sheets Button */}
               <Button
                 variant="outline"
@@ -724,6 +737,8 @@ export default function Home() {
         </TabsContent>
         </Tabs>
       </main>
+
+      <UsageDialog open={showUsageDialog} onOpenChange={setShowUsageDialog} />
 
       {/* Map Dialog */}
       <Dialog open={showMapDialog} onOpenChange={setShowMapDialog}>
