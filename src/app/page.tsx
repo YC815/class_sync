@@ -556,6 +556,7 @@ export default function Home() {
             <h1 className="text-3xl font-bold mb-2">ClassSync</h1>
             <p className="text-muted-foreground mb-2">請先登入 Google 帳號以開始使用</p>
             <p className="text-sm text-blue-600 font-medium">建議使用 T-school 學校帳號登入</p>
+            <p className="text-xs text-red-500 mt-1">目前網頁驗證還沒通過，如果遇到不安全網頁，請點擊進階 → 前往「ClassSync」(不安全)</p>
           </div>
           <Button
             onClick={() => signIn('google')}
@@ -720,7 +721,25 @@ export default function Home() {
                   setCurrentWeek(newWeek)
                 }}
               />
-              
+
+              {/* 週課表使用提醒 */}
+              <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 text-sm">
+                <div className="space-y-2">
+                  <div className="flex items-start gap-2">
+                    <span className="text-blue-600 font-semibold">💡</span>
+                    <span className="text-blue-700">
+                      <strong>單次課程地點異動：</strong>建議填寫「無地點」，手動到 Google Calendar 編輯地點
+                    </span>
+                  </div>
+                  <div className="flex items-start gap-2">
+                    <span className="text-blue-600 font-semibold">💡</span>
+                    <span className="text-blue-700">
+                      <strong>單次課程（如講座、測驗）：</strong>建議善用「其他」功能，手動打出課程名稱
+                    </span>
+                  </div>
+                </div>
+              </div>
+
               {isLoadingSchedule ? (
                 <ScheduleTableSkeleton />
               ) : (

@@ -13,6 +13,23 @@ import { WEEKDAYS_WITH_WEEKENDS, PERIODS } from '@/lib/types'
 export default function ScheduleTableSkeleton() {
   return (
     <div className="space-y-4">
+      {/* 同步狀態圖例 */}
+      <div className="flex items-center gap-4 p-3 bg-gray-50 rounded-lg text-sm">
+        <span className="font-medium text-gray-700">同步狀態：</span>
+        <div className="flex items-center gap-2">
+          <div className="w-4 h-4 bg-green-100 border-l-4 border-green-400 rounded-sm"></div>
+          <span className="text-green-700">已同步至 Google Calendar</span>
+        </div>
+        <div className="flex items-center gap-2">
+          <div className="w-4 h-4 bg-yellow-100 border-l-4 border-yellow-400 rounded-sm border-dashed border-r border-t border-b"></div>
+          <span className="text-yellow-700">本地編輯，尚未同步</span>
+        </div>
+        <div className="flex items-center gap-2">
+          <div className="w-4 h-4 bg-white border border-gray-300 border-dashed rounded-sm"></div>
+          <span className="text-gray-600">空白時段</span>
+        </div>
+      </div>
+
       <div className="border rounded-lg overflow-auto">
         <Table className="min-w-[800px]">
           <TableHeader>
