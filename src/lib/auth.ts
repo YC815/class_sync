@@ -13,7 +13,9 @@ export const authOptions: NextAuthOptions = {
       clientSecret: process.env.GOOGLE_CLIENT_SECRET!,
       authorization: {
         params: {
-          scope: 'openid profile email https://www.googleapis.com/auth/calendar'
+          scope: 'openid profile email https://www.googleapis.com/auth/calendar',
+          access_type: 'offline',
+          prompt: 'consent'
         },
       },
     }),
@@ -72,13 +74,18 @@ export const authOptions: NextAuthOptions = {
         token.accessToken = account.access_token
         token.refreshToken = account.refresh_token
         token.expiresAt = account.expires_at
+        console.log('✅ [Auth] New tokens stored in JWT:', {
+          hasAccessToken: !!account.access_token,
+          hasRefreshToken: !!account.refresh_token,
+          expiresAt: account.expires_at ? new Date(account.expires_at * 1000).toISOString() : 'N/A'
+        })
       }
-      
+
       // Check if token is expired and refresh if needed
       if (token.expiresAt && Date.now() < (token.expiresAt as number) * 1000) {
         return token
       }
-      
+
       // Token is expired, try to refresh it
       if (token.refreshToken) {
         try {
@@ -95,11 +102,11 @@ export const authOptions: NextAuthOptions = {
               client_secret: process.env.GOOGLE_CLIENT_SECRET!,
             }),
           })
-          
+
           if (response.ok) {
             const refreshedTokens = await response.json()
             console.log('✅ [Auth] Token refreshed successfully')
-            
+
             return {
               ...token,
               accessToken: refreshedTokens.access_token,
@@ -107,30 +114,56 @@ export const authOptions: NextAuthOptions = {
               refreshToken: refreshedTokens.refresh_token ?? token.refreshToken,
             }
           } else {
-            console.error('❌ [Auth] Failed to refresh token:', response.status)
+            const errorData = await response.json().catch(() => ({}))
+            console.error('❌ [Auth] Failed to refresh token:', response.status, errorData)
+
+            // 如果是 invalid_grant 錯誤，清除 tokens
+            if (errorData.error === 'invalid_grant') {
+              console.log('❌ [Auth] Refresh token invalid, clearing tokens')
+              return {
+                ...token,
+                accessToken: null,
+                refreshToken: null,
+                expiresAt: null,
+                error: 'RefreshAccessTokenError'
+              }
+            }
           }
         } catch (error) {
           console.error('❌ [Auth] Error refreshing token:', error)
+          return {
+            ...token,
+            error: 'RefreshAccessTokenError'
+          }
         }
       }
-      
+
       return token
     },
     session: async ({ session, token }) => {
       if (session?.user) {
         // Use token.sub as user ID for JWT sessions
         session.user.id = token.sub!
-        if (token?.accessToken) {
+
+        // 檢查是否有 refresh error
+        if (token.error) {
+          console.log('❌ [Auth] Session has token error:', token.error)
+          // 不要提供 accessToken，讓前端知道需要重新認證
+          session.error = token.error as string
+        } else if (token?.accessToken) {
           session.accessToken = token.accessToken as string
+          session.refreshToken = token.refreshToken as string
+          session.expiresAt = token.expiresAt as number
         }
-        
+
         // Add token expiry info for debugging
         if (token?.expiresAt) {
           const isExpired = Date.now() >= (token.expiresAt as number) * 1000
           console.log('🔑 [Auth] Token status:', {
             hasToken: !!token.accessToken,
             expiresAt: new Date((token.expiresAt as number) * 1000).toISOString(),
-            isExpired
+            isExpired,
+            hasError: !!token.error
           })
         }
       }

@@ -4,6 +4,7 @@ import { prisma } from '@/lib/prisma'
 import { GoogleCalendarService } from '@/lib/google-calendar'
 import { authOptions } from '@/lib/auth'
 import { validateScheduleEvent } from '@/lib/schedule-utils'
+import { ensureGoogleAccess, ReauthRequiredError } from '@/lib/google-auth'
 
 export async function POST(
   request: NextRequest,
@@ -40,27 +41,55 @@ export async function POST(
       courseId: e.courseId
     })))
 
-    // Get access token from session (JWT strategy)
-    const accessToken = (session as { accessToken?: string }).accessToken
-    
+    // 獲取 session 中的認證資訊
+    const sessionWithTokens = session as any
+    const accessToken = sessionWithTokens.accessToken
+    const refreshToken = sessionWithTokens.refreshToken
+    const expiresAt = sessionWithTokens.expiresAt
+
     console.log('🔑 [Sync] Session details:', {
       hasSession: !!session,
       hasUser: !!session?.user,
       userId: session?.user?.id,
-      sessionKeys: Object.keys(session || {}),
       hasAccessToken: !!accessToken,
-      tokenLength: accessToken?.length || 0,
-      tokenStart: accessToken?.substring(0, 20) + '...' || 'N/A',
-      fullSession: session
+      hasRefreshToken: !!refreshToken,
+      tokenExpiry: expiresAt ? new Date(expiresAt * 1000).toISOString() : 'N/A'
     })
-    
+
     if (!accessToken) {
       console.log('❌ [Sync] No access token available')
-      console.log('❌ [Sync] Full session object:', JSON.stringify(session, null, 2))
-      return NextResponse.json({ error: 'Google account not connected or token expired. Please sign out and sign in again.' }, { status: 401 })
+      return NextResponse.json({
+        error: 'reauth_required',
+        message: 'Google 帳戶未連結或 token 已過期，請重新登入。'
+      }, { status: 401 })
     }
 
-    const calendarService = new GoogleCalendarService(accessToken)
+    // 確保 Google access token 有效
+    let validAccessToken: string
+    try {
+      validAccessToken = await ensureGoogleAccess({
+        accessToken,
+        refreshToken,
+        expiresAt
+      })
+      console.log('✅ [Sync] Google access token validated')
+    } catch (error) {
+      console.error('❌ [Sync] Token validation/refresh failed:', error)
+
+      if (error instanceof ReauthRequiredError) {
+        return NextResponse.json({
+          error: 'reauth_required',
+          message: error.message
+        }, { status: 401 })
+      }
+
+      return NextResponse.json({
+        error: 'auth_error',
+        message: '認證檢查失敗，請稍後重試。'
+      }, { status: 500 })
+    }
+
+    const calendarService = new GoogleCalendarService(validAccessToken)
     console.log('✅ [Sync] Google Calendar service initialized')
     
     // 首先清理該週的所有現有事件，避免干擾
@@ -94,10 +123,10 @@ export async function POST(
       shouldRemoveFromDb = true
     } else if (status === 401) {
       console.warn(`❌ [Sync] Unauthorized while deleting event ${eventId}:`, error)
-      return NextResponse.json(
-        { error: 'Google Calendar authorization failed. Please sign in again.' },
-        { status: 401 }
-      )
+      return NextResponse.json({
+        error: 'reauth_required',
+        message: 'Google Calendar 授權失敗，請重新登入。'
+      }, { status: 401 })
     } else {
       console.warn(`❗ [Sync] Failed to delete Google event ${eventId}:`, error)
     }
@@ -255,10 +284,10 @@ export async function POST(
         const statusCode = (eventError as any)?.code || (eventError as any)?.response?.status
         if (statusCode === 401) {
           console.error('❌ [Sync] Unauthorized while syncing event:', eventError)
-          return NextResponse.json(
-            { error: 'Google Calendar authorization failed. Please sign in again.' },
-            { status: 401 }
-          )
+          return NextResponse.json({
+            error: 'reauth_required',
+            message: 'Google Calendar 授權失敗，請重新登入。'
+          }, { status: 401 })
         }
         console.error('❌ [Sync] Failed to sync event:', {
           event: {

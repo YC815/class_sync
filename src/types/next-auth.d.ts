@@ -6,11 +6,17 @@ declare module "next-auth" {
       id: string
     } & DefaultSession["user"]
     accessToken?: string
+    refreshToken?: string
+    expiresAt?: number
+    error?: string
   }
 }
 
 declare module "next-auth/jwt" {
   interface JWT {
     accessToken?: string
+    refreshToken?: string
+    expiresAt?: number
+    error?: string
   }
 }

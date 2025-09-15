@@ -7,6 +7,8 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog'
 import { Calendar, Plus, Minus, Loader2, ExternalLink, Check, X, AlertCircle, Menu } from 'lucide-react'
 import { ScheduleEvent } from '@/lib/types'
+import { useAuthErrorHandler } from '@/hooks/useAuthErrorHandler'
+import { AuthErrorModal } from '@/components/auth/AuthErrorModal'
 
 interface FloatingSyncButtonProps {
   onSync: () => Promise<{ syncedEvents: number; deletedEvents: number; message: string }>
@@ -25,6 +27,8 @@ export default function FloatingSyncButton({
   const [syncError, setSyncError] = useState<string | null>(null)
   const [syncResult, setSyncResult] = useState<{ syncedEvents: number; deletedEvents: number; message: string } | null>(null)
 
+  const { authError, isModalOpen, handleAuthError, closeModal } = useAuthErrorHandler()
+
 
   const handleSyncClick = async () => {
     setShowDialog(true)
@@ -38,9 +42,48 @@ export default function FloatingSyncButton({
       setSyncResult(result)
       setSyncStep('success')
     } catch (error) {
-      setSyncStep('error')
-      setSyncError(error instanceof Error ? error.message : '同步失敗')
+      // 檢查是否為認證錯誤
+      if (error instanceof Error && error.message.startsWith('reauth_required:')) {
+        setShowDialog(false) // 關閉同步對話框
+        const message = error.message.replace('reauth_required:', '')
+        handleAuthError({
+          response: {
+            status: 401,
+            data: {
+              error: 'reauth_required',
+              message: message
+            }
+          }
+        })
+      } else if (error instanceof Error && (
+        error.message.includes('401') ||
+        error.message.includes('Unauthorized') ||
+        error.message.includes('認證') ||
+        error.message.includes('授權')
+      )) {
+        setShowDialog(false) // 關閉同步對話框
+        handleAuthError({
+          response: {
+            status: 401,
+            data: {
+              error: 'token_expired',
+              message: error.message
+            }
+          }
+        })
+      } else {
+        setSyncStep('error')
+        setSyncError(error instanceof Error ? error.message : '同步失敗')
+      }
     }
+  }
+
+  const handleRetrySync = () => {
+    closeModal()
+    // 延遲一小段時間再重新同步，確保彈窗關閉動畫完成
+    setTimeout(() => {
+      handleSyncClick()
+    }, 300)
   }
 
 
@@ -269,6 +312,16 @@ export default function FloatingSyncButton({
           )}
         </DialogContent>
       </Dialog>
+
+      {/* 認證錯誤彈窗 */}
+      {authError && (
+        <AuthErrorModal
+          isOpen={isModalOpen}
+          onClose={closeModal}
+          error={authError}
+          onRetry={handleRetrySync}
+        />
+      )}
     </>
   )
 }

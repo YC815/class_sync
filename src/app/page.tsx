@@ -24,6 +24,8 @@ import { useNavbarHeight } from '@/lib/hooks'
 import { fetcher } from '@/lib/fetcher'
 import { toast } from 'sonner'
 import { HelpCircle } from 'lucide-react'
+import { useAuthErrorHandler } from '@/hooks/useAuthErrorHandler'
+import { AuthErrorModal } from '@/components/auth/AuthErrorModal'
 
 
 function formatDateLocal(date: Date): string {
@@ -33,6 +35,7 @@ function formatDateLocal(date: Date): string {
 
 export default function Home() {
   const { data: session, status } = useSession()
+  const { authError, isModalOpen, handleAuthError, closeModal } = useAuthErrorHandler()
   const navbarRef = useRef<HTMLElement>(null!)
   useNavbarHeight(navbarRef)
   const [currentWeek, setCurrentWeek] = useState<Date | null>(null)
@@ -63,6 +66,22 @@ export default function Home() {
   useEffect(() => {
     setCurrentWeek(getWeekStart(new Date()))
   }, [])
+
+  // 檢測 session 中的認證錯誤
+  useEffect(() => {
+    if (session?.error) {
+      console.log('🔴 [Auth] Session error detected:', session.error)
+      handleAuthError({
+        response: {
+          status: 401,
+          data: {
+            error: 'reauth_required',
+            message: '認證 token 已失效，請重新登入以繼續使用。'
+          }
+        }
+      })
+    }
+  }, [session?.error, handleAuthError])
 
 
   const loadWeekScheduleRef = useRef<((week: Date, skipSyncDeleted?: boolean, preserveLocalChanges?: boolean) => Promise<void>) | undefined>(undefined)
@@ -379,9 +398,15 @@ export default function Home() {
       if (response.status === 401) {
         const errorData = await response.json().catch(() => ({}))
         console.error('📅 [Sync] Unauthorized:', errorData)
-        toast.error('登入逾期，請重新登入')
-        await signOut()
-        throw new Error(errorData.error || 'Unauthorized')
+
+        // 檢查是否為認證問題
+        if (errorData.error === 'reauth_required') {
+          throw new Error(`reauth_required:${errorData.message || '需要重新認證 Google 帳戶'}`)
+        } else {
+          toast.error('登入逾期，請重新登入')
+          await signOut()
+          throw new Error(errorData.error || 'Unauthorized')
+        }
       }
 
       if (!response.ok) {
@@ -793,6 +818,15 @@ export default function Home() {
           bases={bases}
           schedule={schedule}
           currentWeek={currentWeek}
+        />
+      )}
+
+      {/* 認證錯誤彈窗 */}
+      {authError && (
+        <AuthErrorModal
+          isOpen={isModalOpen}
+          onClose={closeModal}
+          error={authError}
         />
       )}
     </div>
