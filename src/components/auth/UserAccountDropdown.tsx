@@ -28,8 +28,9 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog'
-import { ChevronDown, LogOut, Settings, RefreshCw } from 'lucide-react'
+import { ChevronDown, LogOut, Settings, RefreshCw, Shield } from 'lucide-react'
 import { toast } from 'sonner'
+import Link from 'next/link'
 
 interface UserAccountDropdownProps {
   onTestReset?: () => Promise<void>
@@ -122,6 +123,15 @@ export default function UserAccountDropdown({ onTestReset, onRecover, isResettin
               <DropdownMenuSeparator />
             </>
           )}
+
+          <DropdownMenuItem asChild>
+            <Link href="/privacy" className="gap-2 w-full">
+              <Shield className="w-4 h-4" />
+              隱私權政策
+            </Link>
+          </DropdownMenuItem>
+
+          <DropdownMenuSeparator />
 
           <DropdownMenuItem onClick={() => signOut()} className="gap-2">
             <LogOut className="w-4 h-4" />

@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useRef, useCallback } from 'react'
 import { useSession, signOut, signIn } from 'next-auth/react'
+import Link from 'next/link'
 import useSWR from 'swr'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Button } from '@/components/ui/button'
@@ -568,6 +569,14 @@ export default function Home() {
             </svg>
             使用 Google 登入
           </Button>
+          <div className="text-center mt-4">
+            <Link
+              href="/privacy"
+              className="text-sm text-muted-foreground hover:text-primary transition-colors"
+            >
+              隱私權政策
+            </Link>
+          </div>
         </div>
       </div>
     )
