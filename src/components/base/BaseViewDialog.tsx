@@ -26,6 +26,37 @@ export default function BaseViewDialog({
     }
   }>({})
 
+  // 基地顏色配置
+  const baseColors = [
+    'bg-blue-100 text-blue-800 border-blue-300',     // 藍色
+    'bg-green-100 text-green-800 border-green-300',   // 綠色
+    'bg-yellow-100 text-yellow-800 border-yellow-300', // 黃色
+    'bg-purple-100 text-purple-800 border-purple-300', // 紫色
+    'bg-pink-100 text-pink-800 border-pink-300',      // 粉色
+    'bg-indigo-100 text-indigo-800 border-indigo-300', // 靛藍色
+    'bg-teal-100 text-teal-800 border-teal-300',      // 青色
+    'bg-orange-100 text-orange-800 border-orange-300', // 橙色
+    'bg-cyan-100 text-cyan-800 border-cyan-300',      // 青藍色
+    'bg-lime-100 text-lime-800 border-lime-300',      // 萊姆色
+  ]
+
+  // 取得基地顏色的函數
+  const getBaseColor = (baseName: string, allBases: string[]) => {
+    if (!baseName || baseName === '線上' || baseName === '空') {
+      return 'bg-gray-100 text-gray-600 border-gray-300'
+    }
+
+    // 找出所有唯一的基地名稱並排序以確保一致性
+    const uniqueBases = Array.from(new Set(allBases.filter(base =>
+      base && base !== '線上' && base !== '空'
+    ))).sort()
+
+    const baseIndex = uniqueBases.indexOf(baseName)
+    if (baseIndex === -1) return baseColors[0]
+
+    return baseColors[baseIndex % baseColors.length]
+  }
+
   useEffect(() => {
     if (!open) return
 
@@ -88,6 +119,16 @@ export default function BaseViewDialog({
     setBaseSchedule(analysis)
   }, [open, bases, schedule])
 
+  // 收集所有基地名稱用於顏色分配
+  const getAllBases = () => {
+    const allBases: string[] = []
+    Object.values(baseSchedule).forEach(dayData => {
+      allBases.push(...dayData.morning.bases)
+      allBases.push(...dayData.afternoon.bases)
+    })
+    return allBases
+  }
+
   const dayNames = ['週一', '週二', '週三', '週四', '週五', '週六', '週日']
 
   const getWeekDates = (weekStart: Date) => {
@@ -115,43 +156,78 @@ export default function BaseViewDialog({
         </DialogHeader>
 
         <div className="overflow-y-auto max-h-[calc(80vh-120px)]">
+          {/* 動態基地顏色圖例 */}
+          <div className="mb-4 p-3 bg-blue-50 rounded-lg border border-blue-200">
+            <div className="text-sm text-gray-700">
+              <div className="flex items-center gap-3 flex-wrap">
+                {/* 顯示當前存在的基地 */}
+                {Array.from(new Set(getAllBases().filter(base =>
+                  base && base !== '線上' && base !== '空'
+                ))).sort().map((baseName) => (
+                  <div key={baseName} className="flex items-center gap-1">
+                    <div className={`w-3 h-3 rounded border ${getBaseColor(baseName, getAllBases()).split(' ')[0]}`}></div>
+                    <span className="text-xs font-medium">{baseName}</span>
+                  </div>
+                ))}
+
+                {/* 特殊狀態 */}
+                <div className="flex items-center gap-1 border-l pl-3 ml-2">
+                  <div className="w-3 h-3 bg-red-100 rounded border border-red-300"></div>
+                  <span className="text-xs">衝突</span>
+                </div>
+                <div className="flex items-center gap-1">
+                  <div className="w-3 h-3 bg-gray-100 rounded border border-gray-300"></div>
+                  <span className="text-xs">無/線上</span>
+                </div>
+              </div>
+            </div>
+          </div>
+
           <div className="border rounded-lg">
             <table className="w-full">
               <thead>
                 <tr className="border-b bg-gray-50">
-                  <th className="text-left p-3 font-medium w-20">時段</th>
-                  {dayNames.map((dayName, index) => (
-                    <th key={index} className="text-center p-3 font-medium">
-                      <div>{dayName}</div>
-                      <div className="text-xs text-gray-500 font-normal">
-                        {weekDates[index].getMonth() + 1}/{weekDates[index].getDate()}
-                      </div>
-                    </th>
-                  ))}
+                  <th className="text-left p-3 font-medium w-32">時段</th>
+                  <th className="text-center p-3 font-medium">上午</th>
+                  <th className="text-center p-3 font-medium">下午</th>
+                </tr>
+                <tr className="border-b bg-gray-100">
+                  <th className="text-left p-3 font-medium">日期 星期</th>
+                  <th className="text-center p-3 font-medium">基地</th>
+                  <th className="text-center p-3 font-medium">基地</th>
                 </tr>
               </thead>
               <tbody>
-                <tr className="border-b">
-                  <td className="p-3 font-medium bg-gray-50">上午</td>
-                  {[1, 2, 3, 4, 5, 6, 7].map(day => {
-                    const morningData = baseSchedule[day]?.morning
-                    const hasConflict = morningData?.hasConflict || false
-                    const bases = morningData?.bases || []
+                {[1, 2, 3, 4, 5, 6, 7].map(day => {
+                  const morningData = baseSchedule[day]?.morning
+                  const afternoonData = baseSchedule[day]?.afternoon
+                  const morningHasConflict = morningData?.hasConflict || false
+                  const afternoonHasConflict = afternoonData?.hasConflict || false
+                  const morningBases = morningData?.bases || []
+                  const afternoonBases = afternoonData?.bases || []
+                  const allBases = getAllBases()
 
-                    return (
-                      <td key={day} className="p-3 text-center">
+                  return (
+                    <tr key={day} className="border-b">
+                      <td className="p-3 font-medium bg-gray-50">
                         <div className="space-y-1">
-                          {bases.length > 0 ? (
-                            hasConflict ? (
+                          <div>{weekDates[day - 1].getMonth() + 1}/{weekDates[day - 1].getDate()}</div>
+                          <div className="text-sm text-gray-600">{dayNames[day - 1]}</div>
+                        </div>
+                      </td>
+                      <td className="p-3 text-center">
+                        <div className="space-y-1">
+                          {morningBases.length > 0 ? (
+                            morningHasConflict ? (
                               <div className="bg-red-100 text-red-800 px-2 py-1 rounded text-xs border border-red-300">
                                 <div className="font-semibold">基地衝突</div>
                                 <div className="text-xs mt-1">
-                                  {bases.join(', ')}
+                                  {morningBases.join(', ')}
                                 </div>
                               </div>
                             ) : (
-                              <div className="bg-blue-100 text-blue-800 px-2 py-1 rounded text-xs">
-                                {bases[0]}
+                              <div className={`${getBaseColor(morningBases[0], allBases)} px-2 py-1 rounded text-xs border`}>
+                                {morningBases[0]}
                               </div>
                             )
                           ) : (
@@ -159,30 +235,19 @@ export default function BaseViewDialog({
                           )}
                         </div>
                       </td>
-                    )
-                  })}
-                </tr>
-                <tr>
-                  <td className="p-3 font-medium bg-gray-50">下午</td>
-                  {[1, 2, 3, 4, 5, 6, 7].map(day => {
-                    const afternoonData = baseSchedule[day]?.afternoon
-                    const hasConflict = afternoonData?.hasConflict || false
-                    const bases = afternoonData?.bases || []
-
-                    return (
-                      <td key={day} className="p-3 text-center">
+                      <td className="p-3 text-center">
                         <div className="space-y-1">
-                          {bases.length > 0 ? (
-                            hasConflict ? (
+                          {afternoonBases.length > 0 ? (
+                            afternoonHasConflict ? (
                               <div className="bg-red-100 text-red-800 px-2 py-1 rounded text-xs border border-red-300">
                                 <div className="font-semibold">基地衝突</div>
                                 <div className="text-xs mt-1">
-                                  {bases.join(', ')}
+                                  {afternoonBases.join(', ')}
                                 </div>
                               </div>
                             ) : (
-                              <div className="bg-green-100 text-green-800 px-2 py-1 rounded text-xs">
-                                {bases[0]}
+                              <div className={`${getBaseColor(afternoonBases[0], allBases)} px-2 py-1 rounded text-xs border`}>
+                                {afternoonBases[0]}
                               </div>
                             )
                           ) : (
@@ -190,9 +255,9 @@ export default function BaseViewDialog({
                           )}
                         </div>
                       </td>
-                    )
-                  })}
-                </tr>
+                    </tr>
+                  )
+                })}
               </tbody>
             </table>
           </div>
@@ -209,30 +274,6 @@ export default function BaseViewDialog({
             </div>
           )}
 
-          {bases.length > 0 && (
-            <div className="mt-4 p-3 bg-gray-50 rounded-lg">
-              <h4 className="text-sm font-medium mb-2">說明</h4>
-              <div className="text-sm text-gray-600 space-y-1">
-                <div className="flex items-center gap-2">
-                  <div className="w-4 h-3 bg-blue-100 rounded"></div>
-                  <span>上午使用的基地</span>
-                </div>
-                <div className="flex items-center gap-2">
-                  <div className="w-4 h-3 bg-green-100 rounded"></div>
-                  <span>下午使用的基地</span>
-                </div>
-                <div className="flex items-center gap-2">
-                  <div className="w-4 h-3 bg-red-100 rounded border border-red-300"></div>
-                  <span>基地衝突 - 同一時段使用多個不同基地</span>
-                </div>
-                <div className="text-xs text-gray-500 mt-2">
-                  • 當同一個上午或下午安排在多個不同的實體基地時會顯示衝突警示
-                  <br />
-                  • 線上課程和空堂不會計入衝突檢測
-                </div>
-              </div>
-            </div>
-          )}
         </div>
       </DialogContent>
     </Dialog>
