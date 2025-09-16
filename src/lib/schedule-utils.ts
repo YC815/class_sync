@@ -1,5 +1,63 @@
 import { WeekSchedule, ScheduleEvent } from './types'
 
+// 學期計算功能 - 整合台灣學制邏輯
+export function getSemester(date: Date = new Date()): string {
+  const year = date.getFullYear();
+  const month = date.getMonth() + 1; // 1-12
+
+  let academicYear: number;
+  let semesterNumber: 1 | 2;
+
+  if (month >= 8) {
+    // 8~12月 → 當年度，第一學期
+    academicYear = year - 1911;
+    semesterNumber = 1;
+  } else if (month >= 2) {
+    // 2~7月 → 前一年度，第二學期
+    academicYear = (year - 1) - 1911;
+    semesterNumber = 2;
+  } else {
+    // 1月 → 前一年度，第一學期
+    academicYear = (year - 1) - 1911;
+    semesterNumber = 1;
+  }
+
+  const semester = `${academicYear}-${semesterNumber}`;
+
+  console.log(`[getSemester] 計算學期: ${date.toISOString().split('T')[0]} → ${semester}`);
+
+  return semester;
+}
+
+// 計算學期週次
+export function calculateAcademicWeek(date: Date = new Date(), semester?: string): number {
+  const targetSemester = semester || getSemester(date);
+  const [academicYearStr, semesterNumStr] = targetSemester.split('-');
+
+  const academicYear = parseInt(academicYearStr, 10);
+  const semesterNumber = parseInt(semesterNumStr, 10) as 1 | 2;
+  const actualYear = academicYear + 1911;
+
+  let semesterStartDate: Date;
+
+  if (semesterNumber === 1) {
+    // 第一學期：8月1日開始
+    semesterStartDate = new Date(actualYear, 7, 1); // 8月1日 (月份0-based)
+  } else {
+    // 第二學期：2月1日開始
+    semesterStartDate = new Date(actualYear, 1, 1); // 2月1日
+  }
+
+  // 計算從學期開始到指定日期的週數
+  const diffTime = Math.abs(date.getTime() - semesterStartDate.getTime());
+  const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+  const weekNumber = Math.max(1, Math.ceil(diffDays / 7));
+
+  console.log(`[calculateAcademicWeek] 計算週次: 學期=${targetSemester}, 日期=${date.toISOString().split('T')[0]}, 週次=${weekNumber}`);
+
+  return weekNumber;
+}
+
 export function getWeekStart(date: Date): Date {
   const d = new Date(date)
   const day = d.getDay() // 0 = Sunday, 1 = Monday, ..., 6 = Saturday
