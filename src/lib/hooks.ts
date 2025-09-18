@@ -9,9 +9,9 @@ export function useNavbarHeight(navbarRef?: React.RefObject<HTMLElement>) {
     
     if (navbar) {
       const height = navbar.getBoundingClientRect().height
-      // 響應式最小高度：寬螢幕 120px，窄螢幕 200px
+      // 響應式最小高度：寬螢幕 120px，窄螢幕 104px (保留雙分頁的視覺高度)
       const isWideScreen = window.innerWidth >= 768 // md breakpoint
-      const minHeight = isWideScreen ? 120 : 200
+      const minHeight = isWideScreen ? 120 : 104
       const totalHeight = Math.max(height, minHeight)
       
       // 更新 CSS 變量

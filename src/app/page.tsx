@@ -62,11 +62,27 @@ export default function Home() {
   const [selectedFloor, setSelectedFloor] = useState<'4f' | '5f' | null>(null)
   const [showBaseViewDialog, setShowBaseViewDialog] = useState(false)
   const [showUsageDialog, setShowUsageDialog] = useState(false)
+  const [showMobileMenu, setShowMobileMenu] = useState(false)
 
   // Initialize currentWeek on client side to avoid hydration mismatch
   useEffect(() => {
     setCurrentWeek(getWeekStart(new Date()))
   }, [])
+
+  // Close mobile menu when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (showMobileMenu) {
+        const target = event.target as Element
+        if (!target.closest('.mobile-menu-container')) {
+          setShowMobileMenu(false)
+        }
+      }
+    }
+
+    document.addEventListener('click', handleClickOutside)
+    return () => document.removeEventListener('click', handleClickOutside)
+  }, [showMobileMenu])
 
   // 檢測 session 中的認證錯誤
   useEffect(() => {
@@ -588,27 +604,151 @@ export default function Home() {
       <nav ref={navbarRef} data-navbar className="fixed top-0 left-0 right-0 z-50 border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60 pt-safe">
         <div className="container mx-auto px-4">
           <div className="flex h-16 items-center justify-between">
-            <div className="flex items-center space-x-4 md:space-x-8">
-              <h1 className="text-lg md:text-xl font-bold">ClassSync</h1>
-              
-              <Tabs value={activeTab} onValueChange={setActiveTab}>
-                <TabsList>
-                  <TabsTrigger value="schedule">週課表</TabsTrigger>
-                  <TabsTrigger value="courses">課程庫</TabsTrigger>
-                  <TabsTrigger value="rooms">教室庫</TabsTrigger>
-                </TabsList>
-              </Tabs>
+            <div className="flex items-center space-x-3 md:space-x-8">
+              {/* 標題：手機使用 favicon，桌面顯示完整標題 */}
+              <div className="flex items-center">
+                <img src="/favicon.ico" alt="ClassSync" className="w-8 h-8 rounded-lg" />
+                <h1 className="text-lg md:text-xl font-bold ml-2 hidden sm:block">ClassSync</h1>
+              </div>
+
+              {/* 標籤導航：桌面版正常，手機版小型化 */}
+              <div className="flex">
+                <div className="sm:hidden">
+                  {/* 手機版小型分段控制器 */}
+                  <div className="inline-flex bg-muted p-0.5 rounded-md">
+                    <button
+                      onClick={() => setActiveTab('schedule')}
+                      className={`px-2 py-1 text-xs font-medium rounded transition-all ${
+                        activeTab === 'schedule'
+                          ? 'bg-background text-foreground shadow-sm'
+                          : 'text-muted-foreground'
+                      }`}
+                    >
+                      課表
+                    </button>
+                    <button
+                      onClick={() => setActiveTab('courses')}
+                      className={`px-2 py-1 text-xs font-medium rounded transition-all ${
+                        activeTab === 'courses'
+                          ? 'bg-background text-foreground shadow-sm'
+                          : 'text-muted-foreground'
+                      }`}
+                    >
+                      課程
+                    </button>
+                    <button
+                      onClick={() => setActiveTab('rooms')}
+                      className={`px-2 py-1 text-xs font-medium rounded transition-all ${
+                        activeTab === 'rooms'
+                          ? 'bg-background text-foreground shadow-sm'
+                          : 'text-muted-foreground'
+                      }`}
+                    >
+                      教室
+                    </button>
+                  </div>
+                </div>
+
+                {/* 桌面版標籤 */}
+                <div className="hidden sm:block">
+                  <Tabs value={activeTab} onValueChange={setActiveTab}>
+                    <TabsList>
+                      <TabsTrigger value="schedule">週課表</TabsTrigger>
+                      <TabsTrigger value="courses">課程庫</TabsTrigger>
+                      <TabsTrigger value="rooms">教室庫</TabsTrigger>
+                    </TabsList>
+                  </Tabs>
+                </div>
+              </div>
             </div>
 
-            <div className="flex items-center space-x-2 md:space-x-4">
+            <div className="flex items-center space-x-1 sm:space-x-2 md:space-x-4">
+              {/* 手機版功能折疊按鈕 */}
+              <div className="relative sm:hidden mobile-menu-container">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="px-2"
+                  onClick={() => setShowMobileMenu(!showMobileMenu)}
+                >
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
+                  </svg>
+                </Button>
+
+                {/* 手機版下拉選單 */}
+                {showMobileMenu && (
+                  <div className="absolute right-0 mt-2 w-48 bg-white rounded-md shadow-lg border z-10">
+                    <div className="py-2">
+                      <button
+                        className="w-full text-left px-4 py-2 text-sm hover:bg-gray-50 flex items-center gap-2"
+                        onClick={() => {
+                          setShowUsageDialog(true)
+                          setShowMobileMenu(false)
+                        }}
+                      >
+                        <HelpCircle className="w-4 h-4" />
+                        使用說明
+                      </button>
+
+                      <a
+                        href="https://docs.google.com/spreadsheets/d/1scxvMRoDHDc_ubV6fWd0rOcHpFzwMESrBmOtoHiezPc/edit?gid=0#gid=0"
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="w-full text-left px-4 py-2 text-sm hover:bg-gray-50 flex items-center gap-2"
+                        onClick={() => setShowMobileMenu(false)}
+                      >
+                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                        </svg>
+                        基礎課表
+                      </a>
+
+                      <div className="border-t my-1"></div>
+
+                      <button
+                        className="w-full text-left px-4 py-2 text-sm hover:bg-gray-50 flex items-center gap-2"
+                        onClick={() => {
+                          setSelectedFloor('4f')
+                          setShowMapDialog(true)
+                          setShowMobileMenu(false)
+                        }}
+                      >
+                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
+                        </svg>
+                        四樓平面圖
+                      </button>
+
+                      <button
+                        className="w-full text-left px-4 py-2 text-sm hover:bg-gray-50 flex items-center gap-2"
+                        onClick={() => {
+                          setSelectedFloor('5f')
+                          setShowMapDialog(true)
+                          setShowMobileMenu(false)
+                        }}
+                      >
+                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
+                        </svg>
+                        五樓平面圖
+                      </button>
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {/* 桌面版使用說明按鈕 */}
               <Button
                 variant="outline"
                 size="sm"
-                className="gap-2"
+                className="gap-2 hidden sm:flex"
                 onClick={() => setShowUsageDialog(true)}
               >
                 <HelpCircle className="w-4 h-4" />
-                使用說明
+                <span className="hidden md:inline">使用說明</span>
               </Button>
 
               {/* Google Sheets Button */}
@@ -627,10 +767,9 @@ export default function Home() {
                   <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
                   </svg>
-                  基礎課表
+                  <span className="hidden md:inline">基礎課表</span>
                 </a>
               </Button>
-
 
               {/* Jilin Base Map Dropdown */}
               <div className="relative group hidden sm:block">
@@ -643,7 +782,7 @@ export default function Home() {
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
                   </svg>
-                  吉林基地地圖
+                  <span className="hidden md:inline">吉林基地地圖</span>
                   <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
                   </svg>
@@ -702,12 +841,12 @@ export default function Home() {
               />
             </div>
           </div>
-          
+
         </div>
       </nav>
 
-      <main 
-        className="container mx-auto p-4 sm:p-6 pt-safe" 
+      <main
+        className="container mx-auto p-4 sm:p-6 pt-safe"
         style={{ paddingTop: 'calc(env(safe-area-inset-top, 0px) + var(--navbar-height, 160px))' }}
       >
         <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
