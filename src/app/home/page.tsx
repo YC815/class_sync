@@ -1,14 +1,80 @@
 'use client'
 
+import { useState } from 'react'
 import { useSession, signIn } from 'next-auth/react'
 import Link from 'next/link'
 import { Button } from '@/components/ui/button'
-import { Card, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import HomeNavbar from '@/components/navigation/HomeNavbar'
-import { Calendar, RotateCw, Users, MapPin, BookOpen, Clock } from 'lucide-react'
+import { Calendar, RotateCw, MapPin, BookOpen } from 'lucide-react'
 
 export default function Home() {
   const { data: session } = useSession()
+  const [selectedFeature, setSelectedFeature] = useState(0)
+
+  const features = [
+    {
+      id: 0,
+      title: '週課表管理',
+      description: '直觀的週課表介面，輕鬆安排和調整課程時間',
+      icon: Calendar,
+      color: 'blue',
+      image: '/home_page/0. inside_system_calendar.png'
+    },
+    {
+      id: 1,
+      title: 'Google Calendar 同步',
+      description: '一鍵同步至 Google Calendar，隨時隨地查看課程安排',
+      icon: RotateCw,
+      color: 'green',
+      image: '/home_page/1.google_calendar.png'
+    },
+    {
+      id: 2,
+      title: '課程庫管理',
+      description: '建立並管理常用課程，快速套用至課表中',
+      icon: BookOpen,
+      color: 'purple',
+      image: '/home_page/3.class_list.png'
+    },
+    {
+      id: 3,
+      title: '教室庫管理',
+      description: '管理教室資訊，自動填入課程地點',
+      icon: MapPin,
+      color: 'orange',
+      image: '/home_page/4.classroom_list.png'
+    }
+  ]
+
+  const getColorClasses = (color: string, isSelected: boolean) => {
+    const colorMap = {
+      blue: {
+        bg: isSelected ? 'bg-blue-600 text-white' : 'bg-blue-50 hover:bg-blue-100',
+        icon: isSelected ? 'bg-blue-500' : 'bg-blue-100',
+        iconColor: isSelected ? 'text-white' : 'text-blue-600',
+        text: isSelected ? 'text-white' : 'text-gray-900'
+      },
+      green: {
+        bg: isSelected ? 'bg-green-600 text-white' : 'bg-green-50 hover:bg-green-100',
+        icon: isSelected ? 'bg-green-500' : 'bg-green-100',
+        iconColor: isSelected ? 'text-white' : 'text-green-600',
+        text: isSelected ? 'text-white' : 'text-gray-900'
+      },
+      purple: {
+        bg: isSelected ? 'bg-purple-600 text-white' : 'bg-purple-50 hover:bg-purple-100',
+        icon: isSelected ? 'bg-purple-500' : 'bg-purple-100',
+        iconColor: isSelected ? 'text-white' : 'text-purple-600',
+        text: isSelected ? 'text-white' : 'text-gray-900'
+      },
+      orange: {
+        bg: isSelected ? 'bg-orange-600 text-white' : 'bg-orange-50 hover:bg-orange-100',
+        icon: isSelected ? 'bg-orange-500' : 'bg-orange-100',
+        iconColor: isSelected ? 'text-white' : 'text-orange-600',
+        text: isSelected ? 'text-white' : 'text-gray-900'
+      }
+    }
+    return colorMap[color as keyof typeof colorMap]
+  }
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-indigo-50">
@@ -66,7 +132,7 @@ export default function Home() {
           </div>
         </section>
 
-        {/* Features Section */}
+        {/* Interactive Features Section */}
         <section className="container mx-auto px-4 py-16">
           <div className="text-center mb-12">
             <h2 className="text-3xl md:text-4xl font-bold text-gray-900 mb-4">
@@ -77,78 +143,64 @@ export default function Home() {
             </p>
           </div>
 
-          <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-8 max-w-6xl mx-auto">
-            <Card className="text-center hover:shadow-lg transition-shadow">
-              <CardHeader>
-                <div className="w-12 h-12 bg-blue-100 rounded-lg flex items-center justify-center mx-auto mb-4">
-                  <Calendar className="w-6 h-6 text-blue-600" />
-                </div>
-                <CardTitle>週課表管理</CardTitle>
-                <CardDescription>
-                  直觀的週課表介面，輕鬆安排和調整課程時間
-                </CardDescription>
-              </CardHeader>
-            </Card>
+          <div className="max-w-7xl mx-auto">
+            <div className="grid lg:grid-cols-5 gap-8">
+              {/* Left side - Feature buttons */}
+              <div className="lg:col-span-2 space-y-4">
+                {features.map((feature) => {
+                  const IconComponent = feature.icon
+                  const isSelected = selectedFeature === feature.id
+                  const colorClasses = getColorClasses(feature.color, isSelected)
 
-            <Card className="text-center hover:shadow-lg transition-shadow">
-              <CardHeader>
-                <div className="w-12 h-12 bg-green-100 rounded-lg flex items-center justify-center mx-auto mb-4">
-                  <RotateCw className="w-6 h-6 text-green-600" />
-                </div>
-                <CardTitle>Google Calendar 同步</CardTitle>
-                <CardDescription>
-                  一鍵同步至 Google Calendar，隨時隨地查看課程安排
-                </CardDescription>
-              </CardHeader>
-            </Card>
+                  return (
+                    <button
+                      key={feature.id}
+                      onClick={() => setSelectedFeature(feature.id)}
+                      className={`w-full p-6 rounded-xl text-left transition-all duration-300 transform hover:scale-105 ${colorClasses.bg}`}
+                    >
+                      <div className="flex items-start space-x-4">
+                        <div className={`w-12 h-12 rounded-lg flex items-center justify-center ${colorClasses.icon}`}>
+                          <IconComponent className={`w-6 h-6 ${colorClasses.iconColor}`} />
+                        </div>
+                        <div className="flex-1">
+                          <h3 className={`text-lg font-semibold mb-2 ${colorClasses.text}`}>
+                            {feature.title}
+                          </h3>
+                          <p className={`text-sm ${isSelected ? 'text-gray-100' : 'text-gray-600'}`}>
+                            {feature.description}
+                          </p>
+                        </div>
+                      </div>
+                    </button>
+                  )
+                })}
+              </div>
 
-            <Card className="text-center hover:shadow-lg transition-shadow">
-              <CardHeader>
-                <div className="w-12 h-12 bg-purple-100 rounded-lg flex items-center justify-center mx-auto mb-4">
-                  <BookOpen className="w-6 h-6 text-purple-600" />
+              {/* Right side - Feature screenshot */}
+              <div className="lg:col-span-3">
+                <div className="bg-white rounded-2xl shadow-2xl overflow-hidden">
+                  <div className="bg-gray-100 px-6 py-4 border-b">
+                    <div className="flex items-center space-x-2">
+                      <div className="w-3 h-3 rounded-full bg-red-400"></div>
+                      <div className="w-3 h-3 rounded-full bg-yellow-400"></div>
+                      <div className="w-3 h-3 rounded-full bg-green-400"></div>
+                      <div className="ml-4 text-sm text-gray-600 font-mono">
+                        {features[selectedFeature].title} - ClassSync
+                      </div>
+                    </div>
+                  </div>
+                  <div className="relative">
+                    <img
+                      src={features[selectedFeature].image}
+                      alt={features[selectedFeature].title}
+                      className="w-full h-auto transition-opacity duration-500"
+                    />
+                    {/* Loading overlay for smooth transitions */}
+                    <div className="absolute inset-0 bg-gray-100 animate-pulse opacity-0 pointer-events-none"></div>
+                  </div>
                 </div>
-                <CardTitle>課程庫管理</CardTitle>
-                <CardDescription>
-                  建立並管理常用課程，快速套用至課表中
-                </CardDescription>
-              </CardHeader>
-            </Card>
-
-            <Card className="text-center hover:shadow-lg transition-shadow">
-              <CardHeader>
-                <div className="w-12 h-12 bg-orange-100 rounded-lg flex items-center justify-center mx-auto mb-4">
-                  <MapPin className="w-6 h-6 text-orange-600" />
-                </div>
-                <CardTitle>教室庫管理</CardTitle>
-                <CardDescription>
-                  管理教室資訊，自動填入課程地點
-                </CardDescription>
-              </CardHeader>
-            </Card>
-
-            <Card className="text-center hover:shadow-lg transition-shadow">
-              <CardHeader>
-                <div className="w-12 h-12 bg-red-100 rounded-lg flex items-center justify-center mx-auto mb-4">
-                  <Users className="w-6 h-6 text-red-600" />
-                </div>
-                <CardTitle>協作分享</CardTitle>
-                <CardDescription>
-                  與同事分享課表，協調教室使用時間
-                </CardDescription>
-              </CardHeader>
-            </Card>
-
-            <Card className="text-center hover:shadow-lg transition-shadow">
-              <CardHeader>
-                <div className="w-12 h-12 bg-indigo-100 rounded-lg flex items-center justify-center mx-auto mb-4">
-                  <Clock className="w-6 h-6 text-indigo-600" />
-                </div>
-                <CardTitle>智慧提醒</CardTitle>
-                <CardDescription>
-                  自動恢復已刪除事件，確保課表資訊完整
-                </CardDescription>
-              </CardHeader>
-            </Card>
+              </div>
+            </div>
           </div>
         </section>
 
@@ -166,6 +218,7 @@ export default function Home() {
 
             <div className="max-w-4xl mx-auto">
               <div className="grid md:grid-cols-3 gap-8">
+
                 <div className="text-center">
                   <div className="w-16 h-16 bg-blue-600 text-white rounded-full flex items-center justify-center text-2xl font-bold mx-auto mb-4">
                     1
