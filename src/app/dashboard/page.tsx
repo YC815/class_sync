@@ -480,7 +480,6 @@ export default function Dashboard() {
 
     try {
       const requestBody = {
-        userId: session?.user?.id,
         weekStart: weekStartStr,
         data: scheduleData
       }
