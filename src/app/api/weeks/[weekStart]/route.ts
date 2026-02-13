@@ -176,8 +176,7 @@ async function recoverEventsFromCalendar(
             update: {},
             create: {
               userId,
-              weekStart,
-              data: { 1: {}, 2: {}, 3: {}, 4: {}, 5: {}, 6: {}, 7: {} }
+              weekStart
             }
           })
 
@@ -254,17 +253,7 @@ export async function GET(
     let recoveryInfo: { recoveredEvents: number, errors: string[] } | null = null
 
     try {
-      // 首先嘗試從 Week 表獲取原始課表資料
-      const weekRecord = await prisma.week.findUnique({
-        where: {
-          userId_weekStart: {
-            userId,
-            weekStart
-          }
-        }
-      })
-
-      // 每次載入都先自動恢復 Google Calendar 事件（無論是否有 Week 記錄）
+      // 每次載入都先自動恢復 Google Calendar 事件
       console.log('🔄 [LoadSchedule] Starting automatic recovery from Google Calendar')
       const accessToken = (session as { accessToken?: string }).accessToken
       if (accessToken) {
@@ -283,85 +272,43 @@ export async function GET(
         console.warn('⚠️ [LoadSchedule] No access token available for auto-recovery')
       }
 
-      if (weekRecord && weekRecord.data) {
-        // 如果有保存的課表資料，但可能需要補充恢復的事件
-        schedule = weekRecord.data as WeekSchedule
-        console.log('Found week record with data, checking if events need to be added to schedule')
+      // 直接從 events 表重建課表（唯一真相來源）
+      console.log('Building schedule from events table (single source of truth)')
+      const events = await prisma.event.findMany({
+        where: {
+          userId,
+          weekStart
+        },
+        orderBy: [
+          { weekday: 'asc' },
+          { periodStart: 'asc' }
+        ]
+      })
 
-        // 重新從事件構建課表以包含任何新恢復的事件
-        const events = await prisma.event.findMany({
-          where: {
-            userId,
-            weekStart
-          },
-          orderBy: [
-            { weekday: 'asc' },
-            { periodStart: 'asc' }
-          ]
-        })
+      console.log('Found events:', events.length)
+      totalEvents = events.length
 
-        console.log('Found events (after recovery):', events.length)
-        totalEvents = events.length
-
-        // 重建完整課表
-        schedule = { 1: {}, 2: {}, 3: {}, 4: {}, 5: {}, 6: {}, 7: {} }
-        events.forEach(event => {
-          // 為每個時段填入課程資訊
-          for (let period = event.periodStart; period <= event.periodEnd; period++) {
-            if (!schedule[event.weekday]) {
-              schedule[event.weekday] = {}
-            }
-
-            schedule[event.weekday][period] = {
-              courseId: event.courseId || undefined,
-              courseName: event.courseName || '',
-              base: event.baseName || undefined,
-              room: event.roomName || undefined,
-              location: event.baseName ?
-                (event.baseName + (event.roomName ? ' - ' + event.roomName : '')) :
-                undefined,
-              address: event.address || undefined,
-            }
+      // 重建完整課表
+      schedule = { 1: {}, 2: {}, 3: {}, 4: {}, 5: {}, 6: {}, 7: {} }
+      events.forEach(event => {
+        // 為每個時段填入課程資訊
+        for (let period = event.periodStart; period <= event.periodEnd; period++) {
+          if (!schedule[event.weekday]) {
+            schedule[event.weekday] = {}
           }
-        })
-      } else {
-        console.log('No week record found, building schedule from events after recovery...')
 
-        // 從事件重建課表（包括任何新恢復的事件）
-        const events = await prisma.event.findMany({
-          where: {
-            userId,
-            weekStart
-          },
-          orderBy: [
-            { weekday: 'asc' },
-            { periodStart: 'asc' }
-          ]
-        })
-
-        console.log('Found events (after recovery):', events.length)
-        totalEvents = events.length
-
-        events.forEach(event => {
-          // 為每個時段填入課程資訊
-          for (let period = event.periodStart; period <= event.periodEnd; period++) {
-            if (!schedule[event.weekday]) {
-              schedule[event.weekday] = {}
-            }
-
-            schedule[event.weekday][period] = {
-              courseId: event.courseId || undefined,
-              courseName: event.courseName || '',
-              base: event.baseName || undefined,
-              room: event.roomName || undefined,
-              location: event.baseName ?
-                (event.baseName + (event.roomName ? ' - ' + event.roomName : '')) :
-                undefined,
-              address: event.address || undefined,
-            }
+          schedule[event.weekday][period] = {
+            courseId: event.courseId || undefined,
+            courseName: event.courseName || '',
+            base: event.baseName || undefined,
+            room: event.roomName || undefined,
+            location: event.baseName ?
+              (event.baseName + (event.roomName ? ' - ' + event.roomName : '')) :
+              undefined,
+            address: event.address || undefined,
           }
-        })
-      }
+        }
+      })
     } catch (dbError) {
       console.error('Database error:', dbError)
       // 如果資料庫查詢失敗，返回空課表而不是錯誤

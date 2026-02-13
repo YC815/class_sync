@@ -3,7 +3,6 @@ import { getServerSession } from 'next-auth'
 import { prisma } from '@/lib/prisma'
 import { GoogleCalendarService } from '@/lib/google-calendar'
 import { authOptions } from '@/lib/auth'
-import { WeekSchedule } from '@/lib/types'
 
 // Enhanced matching algorithm for linking database events with calendar events
 function findMatchingCalendarEvent(dbEvent: any, calendarEvents: any[], weekStart: Date) {
@@ -181,45 +180,8 @@ export async function POST(
       }
     }
 
-    // Also remove these events from the saved week schedule
-    if (deletedEventIds.length > 0) {
-      try {
-        const weekRecord = await prisma.week.findUnique({
-          where: {
-            userId_weekStart: {
-              userId,
-              weekStart,
-            },
-          },
-        })
+    // weeks.data 已移除，不再需要更新它（events 表是唯一真相來源）
 
-        if (weekRecord?.data) {
-          const scheduleData = weekRecord.data as WeekSchedule
-          eventsToDelete.forEach(event => {
-            for (let p = event.periodStart; p <= event.periodEnd; p++) {
-              if (!scheduleData[event.weekday]) {
-                scheduleData[event.weekday] = {}
-              }
-              scheduleData[event.weekday][p] = null
-            }
-          })
-
-          await prisma.week.update({
-            where: {
-              userId_weekStart: {
-                userId,
-                weekStart,
-              },
-            },
-            data: { data: scheduleData as any },
-          })
-          console.log('✅ [SyncDeleted] Updated week schedule to remove deleted events')
-        }
-      } catch (scheduleError) {
-        console.error('❌ [SyncDeleted] Failed to update week schedule:', scheduleError)
-      }
-    }
-    
     console.log('✅ [SyncDeleted] Sync completed successfully:', {
       deletedFromDb: deletedEventIds.length,
       totalProcessed: dbEvents.length

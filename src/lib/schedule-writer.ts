@@ -125,8 +125,7 @@ export async function writeScheduleAsEvents(
       },
       create: {
         userId,
-        weekStart,
-        data: {} // 暫時保留 data 欄位，稍後會移除
+        weekStart
       },
       update: {}
     })

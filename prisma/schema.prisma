@@ -128,12 +128,11 @@ model Week {
   id        String   @id @default(cuid())
   userId    String   @map("user_id")
   weekStart DateTime @map("week_start") @db.Date
-  data      Json
   createdAt DateTime @default(now()) @map("created_at")
-  
+
   user   User    @relation(fields: [userId], references: [id], onDelete: Cascade)
   events Event[]
-  
+
   @@unique([userId, weekStart])
   @@map("weeks")
   @@index([userId, weekStart])
