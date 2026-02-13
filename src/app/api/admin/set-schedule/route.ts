@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { timingSafeEqual } from 'crypto'
 import { prisma } from '@/lib/prisma'
 import { validateScheduleData } from '@/lib/schedule-utils'
+import { writeScheduleAsEvents } from '@/lib/schedule-writer'
 import type { WeekSchedule } from '@/lib/types'
 
 export const dynamic = 'force-dynamic'
@@ -50,25 +51,21 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Invalid schedule data', errors }, { status: 400 })
     }
 
-    // Upsert week
-    await prisma.week.upsert({
-      where: {
-        userId_weekStart: {
-          userId,
-          weekStart: new Date(weekStart),
-        },
-      },
-      create: {
-        userId,
-        weekStart: new Date(weekStart),
-        data,
-      },
-      update: {
-        data,
-      },
-    })
+    // 使用新的統一寫入邏輯：將 WeekSchedule 寫入 events 表
+    const result = await writeScheduleAsEvents(
+      userId,
+      new Date(weekStart),
+      data as WeekSchedule,
+      prisma
+    )
 
-    return NextResponse.json({ success: true, weekStart })
+    console.log(`[Admin API] Successfully wrote schedule for week ${weekStart}: ${result.eventsCreated} events created`)
+
+    return NextResponse.json({
+      success: true,
+      weekStart,
+      eventsCreated: result.eventsCreated
+    })
   } catch {
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
   }
