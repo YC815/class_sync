@@ -4,6 +4,9 @@ import { prisma } from '@/lib/prisma'
 import { validateScheduleData } from '@/lib/schedule-utils'
 import type { WeekSchedule } from '@/lib/types'
 
+export const dynamic = 'force-dynamic'
+export const runtime = 'nodejs'
+
 export async function POST(request: NextRequest) {
   try {
     const { apiKey, userId, weekStart, data } = await request.json()
