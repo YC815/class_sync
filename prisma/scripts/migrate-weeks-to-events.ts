@@ -20,6 +20,7 @@ import type { WeekSchedule } from '../../src/lib/types'
 
 // 由於此腳本在 migration 之前運行，Week model 還有 data 欄位
 // 使用 any 繞過型別檢查
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 type WeekWithData = any
 
 const prisma = new PrismaClient()
@@ -40,6 +41,7 @@ async function migrate() {
     // 找出所有有 weeks.data 但沒有對應 events 的記錄
     console.log('🔍 查詢需要遷移的週課表記錄...')
 
+    /* eslint-disable @typescript-eslint/no-explicit-any */
     const weeksWithData = (await prisma.week.findMany({
       where: {
         data: { not: {} }
@@ -48,6 +50,7 @@ async function migrate() {
         events: true
       }
     })) as WeekWithData[]
+    /* eslint-enable @typescript-eslint/no-explicit-any */
 
     console.log(`📊 找到 ${weeksWithData.length} 筆週課表記錄`)
 
@@ -64,6 +67,7 @@ async function migrate() {
     // 顯示前 3 筆待遷移的記錄
     console.log('📋 待遷移記錄範例（前 3 筆）：')
     weeksToMigrate.slice(0, 3).forEach((week, idx) => {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const schedule = (week as any).data as WeekSchedule
       const cellCount = Object.values(schedule).reduce((sum, day) => {
         return sum + Object.values(day || {}).filter(cell => cell !== null).length
@@ -90,6 +94,7 @@ async function migrate() {
     const errors: { weekId: string; error: string }[] = []
 
     for (const week of weeksToMigrate) {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const schedule = (week as any).data as WeekSchedule
 
       try {
