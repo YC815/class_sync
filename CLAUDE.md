@@ -26,7 +26,7 @@ Dev server runs on port 3008 (`next dev -p 3008`). **Do not run `npm run dev`.**
 - **Prisma 6** → PostgreSQL (client output: `src/generated/prisma`)
 - **NextAuth.js 4** with Google OAuth (JWT strategy, offline access for Calendar scope)
 - **SWR** for client data fetching, **Zod** for validation
-- **Tailwind CSS 4** + **shadcn/ui** (new-york style, lucide icons)
+- **Tailwind CSS 4** + **shadcn/ui** (new-york style, lucide icons) + **sonner** for toasts
 - **Vitest** for testing (node environment, `@` alias configured)
 
 ## Architecture
@@ -39,11 +39,13 @@ Dev server runs on port 3008 (`next dev -p 3008`). **Do not run `npm run dev`.**
 
 NextAuth with Google OAuth stores access/refresh tokens in JWT. The `session` callback injects `accessToken`, `refreshToken`, `expiresAt` into the client session. Token refresh is handled in the JWT callback with `ReauthRequiredError` propagation via `session.error`. All API routes gate on `getServerSession(authOptions)`.
 
+Auth errors surface via `useAuthErrorHandler` hook (in `src/hooks/useAuthErrorHandler.ts`) which exposes `handleAuthError`, `checkApiResponse`, `closeModal`. The `AuthErrorModal` component handles 3 error types (`reauth_required`, `token_expired`, `auth_error`) and triggers re-authentication.
+
 ### Schedule data model
 
-The schedule is a `WeekSchedule` — a nested object keyed by `[day: 0-6][period: 1-8]` holding `ScheduleCell | null`. Stored as JSON in the `Week` model, keyed by `(userId, weekStart)` where `weekStart` is the Monday date as `YYYY-MM-DD`.
+The schedule is a `WeekSchedule` — a nested object keyed by `[day: 1-7][period: 1-8]` (1=Monday, 7=Sunday) holding `ScheduleCell | null`. The `Week` model is an anchor record `(userId, weekStart)` with no JSON column — all schedule data lives exclusively in the `Event` table (single source of truth). `weekStart` is the Monday date as `YYYY-MM-DD`.
 
-Each cell tracks `courseId`, `courseName`, base/room info, `isSynced` flag, and `calendarEventId` for sync state.
+Each `ScheduleCell` tracks `courseId`, `courseName`, base/room info, `isSynced` (client-only UI hint, not persisted), and `calendarEventId` for sync state.
 
 ### Google Calendar sync pipeline
 
@@ -75,17 +77,33 @@ Semester calculation in `schedule-utils.ts` uses ROC year (Western year − 1911
 - `src/lib/google-calendar.ts` — Google Calendar API wrapper (create/update/delete events)
 - `src/lib/google-auth.ts` — Token management, `ReauthRequiredError`
 - `src/lib/schedule-utils.ts` — Schedule manipulation, semester calculation, event merging
+- `src/lib/schedule-writer.ts` — `writeScheduleAsEvents()`: unified write path persisting `WeekSchedule` to the `Event` table
+- `src/lib/user-init.ts` — `initializeUserDefaults()`: creates default bases/rooms on first login
 - `src/lib/types.ts` — All shared types, constants (periods, bases, rooms)
 - `src/lib/prisma.ts` — Prisma client singleton
 - `src/lib/api-client.ts` — Client-side API wrapper with error callback
+- `src/lib/fetcher.ts` — Generic SWR fetcher utility
+- `src/lib/utils.ts` — `cn()` helper (clsx + tailwind-merge)
+- `src/lib/hooks.ts` — `useNavbarHeight()`: sets `--navbar-height` CSS variable via ResizeObserver
+- `src/hooks/useAuthErrorHandler.ts` — Auth error state management hook
+
+### Admin and external APIs
+
+- `POST /api/admin/lookup-user`, `POST /api/admin/set-schedule` — protected by `ADMIN_API_KEY` (timing-safe). `set-schedule` uses `writeScheduleAsEvents()` to write a schedule on behalf of any user.
+- `GET /api/tschool/payload` — external API for tschool system. Bearer-token auth via `TSCHOOL_API_SECRET`. Returns `TschoolPayload` (ROC academic year, am/pm location per weekday). Has own semester utils under `src/app/api/tschool/`.
+- `POST /api/test-reset` — dev utility: clears calendar events, week schedules, resets bases to defaults.
 
 ### Prisma
 
-Schema at `prisma/schema.prisma`. Client generates to `src/generated/prisma` (non-default path). ESLint ignores `src/generated/**/*`. Key models: User, Course, CourseLink, Base, Room, Week (JSON schedule), Event (Calendar sync tracking), LinkType.
+Schema at `prisma/schema.prisma`. Client generates to `src/generated/prisma` (non-default path). ESLint ignores `src/generated/**/*`. Key models: User, Course, CourseLink, Base, Room, Week (anchor only), Event (all schedule + Calendar sync data), LinkType.
 
 ### UI components
 
 shadcn/ui components in `src/components/ui/`. Config in `components.json`. Add new components via `npx shadcn@latest add <component>`.
+
+### Deployment
+
+`next.config.ts` uses `output: 'standalone'` for Zeabur/Docker. TypeScript errors fail builds; ESLint errors do not.
 
 ## Environment Variables
 
@@ -94,3 +112,5 @@ Required in `.env.local` (see `.env.example`):
 - `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` — Google OAuth credentials
 - `NEXTAUTH_SECRET` — NextAuth encryption key
 - `NEXTAUTH_URL` — App base URL
+- `ADMIN_API_KEY` — protects `/api/admin/*` endpoints
+- `TSCHOOL_API_SECRET` — Bearer token for `/api/tschool/payload`
