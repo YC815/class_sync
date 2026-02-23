@@ -463,6 +463,38 @@ export default function Dashboard() {
     }
   }
 
+  const handleForceSync = async () => {
+    setIsLoading(true)
+    try {
+      const response = await fetch('/api/force-sync-all', { method: 'POST' })
+
+      if (response.status === 401) {
+        const errorData = await response.json().catch(() => ({}))
+        if (errorData.error === 'reauth_required') {
+          throw new Error(`reauth_required:${errorData.message || '需要重新認證 Google 帳戶'}`)
+        } else {
+          toast.error('登入逾期，請重新登入')
+          await signOut()
+          return
+        }
+      }
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}))
+        toast.error(errorData.error || '強制同步失敗')
+        return
+      }
+
+      const data = await response.json()
+      toast.success(data.message || '強制重新同步完成！')
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : '未知錯誤'
+      toast.error(`強制同步失敗：${errorMessage}`)
+    } finally {
+      setIsLoading(false)
+    }
+  }
+
   const handleTestReset = async () => {
     setIsResetting(true)
     try {
@@ -789,6 +821,7 @@ export default function Dashboard() {
               <UserAccountDropdown
                 onTestReset={handleTestReset}
                 onRecover={currentWeek ? () => manualRecovery(currentWeek) : undefined}
+                onForceSync={handleForceSync}
                 isResetting={isResetting}
                 isLoading={isLoading}
               />

@@ -35,14 +35,16 @@ import Link from 'next/link'
 interface UserAccountDropdownProps {
   onTestReset?: () => Promise<void>
   onRecover?: () => void
+  onForceSync?: () => Promise<void>
   isResetting?: boolean
   isLoading?: boolean
 }
 
-export default function UserAccountDropdown({ onTestReset, onRecover, isResetting = false, isLoading = false }: UserAccountDropdownProps) {
+export default function UserAccountDropdown({ onTestReset, onRecover, onForceSync, isResetting = false, isLoading = false }: UserAccountDropdownProps) {
   const { data: session, status } = useSession()
   const [showAdvancedSettings, setShowAdvancedSettings] = useState(false)
   const [showResetDialog, setShowResetDialog] = useState(false)
+  const [showForceSyncDialog, setShowForceSyncDialog] = useState(false)
 
   if (status === 'loading') {
     return (
@@ -111,18 +113,28 @@ export default function UserAccountDropdown({ onTestReset, onRecover, isResettin
 
         <DropdownMenuContent align="end" className="w-48">
           {onRecover && (
-            <>
-              <DropdownMenuItem
-                onClick={onRecover}
-                disabled={isLoading}
-                className="gap-2"
-              >
-                <RefreshCw className="w-4 h-4" />
-                恢復事件
-              </DropdownMenuItem>
-              <DropdownMenuSeparator />
-            </>
+            <DropdownMenuItem
+              onClick={onRecover}
+              disabled={isLoading}
+              className="gap-2"
+            >
+              <RefreshCw className="w-4 h-4" />
+              恢復事件
+            </DropdownMenuItem>
           )}
+
+          {onForceSync && (
+            <DropdownMenuItem
+              onClick={() => setShowForceSyncDialog(true)}
+              disabled={isLoading}
+              className="gap-2 text-orange-600 hover:text-orange-700 focus:text-orange-700"
+            >
+              <RefreshCw className="w-4 h-4" />
+              強制重新同步
+            </DropdownMenuItem>
+          )}
+
+          {(onRecover || onForceSync) && <DropdownMenuSeparator />}
 
           <DropdownMenuItem asChild>
             <Link href="/privacy" className="gap-2 w-full">
@@ -209,6 +221,41 @@ export default function UserAccountDropdown({ onTestReset, onRecover, isResettin
               className="bg-red-600 hover:bg-red-700"
             >
               {isResetting ? '重置中...' : '確認重置'}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* 強制重新同步確認對話框 */}
+      <AlertDialog open={showForceSyncDialog} onOpenChange={setShowForceSyncDialog}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>確認強制重新同步</AlertDialogTitle>
+            <AlertDialogDescription>
+              此操作將對今天（含）以後的所有週執行以下動作：
+            </AlertDialogDescription>
+            <div className="space-y-2 text-sm">
+              <ul className="list-disc list-inside space-y-1">
+                <li className="text-orange-600">刪除 Google Calendar 中今天以後的所有 ClassSync 事件</li>
+                <li className="text-orange-600">清空資料庫中對應的同步紀錄</li>
+                <li className="text-green-600">重新建立所有事件至 Google Calendar</li>
+              </ul>
+              <div className="text-orange-600 font-semibold mt-4">
+                ⚠️ 此操作無法復原，適用於修復 Calendar 資料損毀的情況。
+              </div>
+            </div>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>取消</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={async () => {
+                setShowForceSyncDialog(false)
+                if (onForceSync) await onForceSync()
+              }}
+              disabled={isLoading}
+              className="bg-orange-600 hover:bg-orange-700"
+            >
+              確認強制同步
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
