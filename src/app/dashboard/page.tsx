@@ -352,71 +352,24 @@ export default function Dashboard() {
 
     const weekStartStr = formatDateLocal(currentWeek)
     console.log('🔄 [Sync] Starting sync for week:', weekStartStr)
-    console.log('🔄 [Sync] Current schedule data:', schedule)
 
     setIsLoading(true)
     try {
-      // 先保存當前課表資料
+      // Step 1: Save current schedule to DB
       console.log('💾 [Sync] Saving schedule data first')
       await saveScheduleData(weekStartStr, schedule)
 
-      // 獲取預覽變更(內部使用)
-      console.log('🔍 [Sync] Getting preview changes internally')
-      const previewRequestBody = {
-        scheduleData: schedule,
-        currentLocation: ''
-      }
-
-      const previewResponse = await fetch(`/api/weeks/${weekStartStr}/preview`, {
+      // Step 2: Sync all unsynced events across all weeks
+      const response = await fetch('/api/sync-all', {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(previewRequestBody),
+        headers: { 'Content-Type': 'application/json' }
       })
 
-      if (previewResponse.status === 401) {
-        toast.error('登入逾期，請重新登入')
-        await signOut()
-        throw new Error('Unauthorized')
-      }
-
-      if (!previewResponse.ok) {
-        throw new Error('Failed to get preview changes')
-      }
-
-      const previewData = await previewResponse.json()
-      const previewChanges = previewData.changes
-
-      console.log('🔄 [Sync] Preview changes:', {
-        create: previewChanges.create.length,
-        update: previewChanges.update.length,
-        delete: previewChanges.delete.length
-      })
-
-      // 同步到 Google Calendar
-      const syncRequestBody = {
-        events: previewChanges.create.concat(previewChanges.update),
-        eventsToDelete: previewChanges.delete
-      }
-
-      console.log('📅 [Sync] Sending sync request to Google Calendar with body:', syncRequestBody)
-
-      const response = await fetch(`/api/weeks/${weekStartStr}/sync`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(syncRequestBody),
-      })
-
-      console.log('📅 [Sync] Sync response status:', response.status)
+      console.log('📅 [Sync] sync-all response status:', response.status)
 
       if (response.status === 401) {
         const errorData = await response.json().catch(() => ({}))
         console.error('📅 [Sync] Unauthorized:', errorData)
-
-        // 檢查是否為認證問題
         if (errorData.error === 'reauth_required') {
           throw new Error(`reauth_required:${errorData.message || '需要重新認證 Google 帳戶'}`)
         } else {
@@ -436,7 +389,7 @@ export default function Dashboard() {
       console.log('✅ [Sync] Sync successful:', data)
       toast.success(data.message || '同步成功！')
 
-      // 同步成功後，將所有項目標記為已同步
+      // 同步成功後，將當前週所有項目標記為已同步
       const updatedSchedule = { ...schedule }
       Object.keys(updatedSchedule).forEach(day => {
         const dayNum = parseInt(day)
@@ -459,9 +412,10 @@ export default function Dashboard() {
       setPendingChanges(null)
       setIsPreventingReload(false)
 
+      const syncedEvents = (data.created || 0) + (data.linked || 0) + (data.replaced || 0)
       return {
-        syncedEvents: data.syncedEvents || 0,
-        deletedEvents: data.deletedEvents || 0,
+        syncedEvents,
+        deletedEvents: data.replaced || 0,
         message: data.message || '同步成功！'
       }
     } catch (error) {
