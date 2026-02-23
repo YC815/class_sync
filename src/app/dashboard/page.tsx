@@ -24,7 +24,7 @@ import { loadLocalSchedule, saveLocalSchedule } from '@/lib/local-schedule'
 import { useNavbarHeight } from '@/lib/hooks'
 import { fetcher } from '@/lib/fetcher'
 import { toast } from 'sonner'
-import { HelpCircle } from 'lucide-react'
+import { HelpCircle, Loader2, Check, AlertCircle } from 'lucide-react'
 import { useAuthErrorHandler } from '@/hooks/useAuthErrorHandler'
 import { AuthErrorModal } from '@/components/auth/AuthErrorModal'
 
@@ -63,6 +63,9 @@ export default function Dashboard() {
   const [showBaseViewDialog, setShowBaseViewDialog] = useState(false)
   const [showUsageDialog, setShowUsageDialog] = useState(false)
   const [showMobileMenu, setShowMobileMenu] = useState(false)
+  const [showForceSyncModal, setShowForceSyncModal] = useState(false)
+  const [forceSyncStep, setForceSyncStep] = useState<'syncing' | 'success' | 'error'>('syncing')
+  const [forceSyncMessage, setForceSyncMessage] = useState<string | null>(null)
 
   // Initialize currentWeek on client side to avoid hydration mismatch
   useEffect(() => {
@@ -464,32 +467,44 @@ export default function Dashboard() {
   }
 
   const handleForceSync = async () => {
+    setShowForceSyncModal(true)
+    setForceSyncStep('syncing')
+    setForceSyncMessage(null)
     setIsLoading(true)
     try {
       const response = await fetch('/api/force-sync-all', { method: 'POST' })
 
       if (response.status === 401) {
         const errorData = await response.json().catch(() => ({}))
+        setShowForceSyncModal(false)
         if (errorData.error === 'reauth_required') {
-          throw new Error(`reauth_required:${errorData.message || '需要重新認證 Google 帳戶'}`)
+          handleAuthError({
+            response: {
+              status: 401,
+              data: { error: 'reauth_required', message: errorData.message || '需要重新認證 Google 帳戶' }
+            }
+          })
         } else {
           toast.error('登入逾期，請重新登入')
           await signOut()
-          return
         }
+        return
       }
 
       if (!response.ok) {
         const errorData = await response.json().catch(() => ({}))
-        toast.error(errorData.error || '強制同步失敗')
+        setForceSyncStep('error')
+        setForceSyncMessage(errorData.error || '強制同步失敗')
         return
       }
 
       const data = await response.json()
-      toast.success(data.message || '強制重新同步完成！')
+      setForceSyncStep('success')
+      setForceSyncMessage(data.message || '強制重新同步完成！')
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : '未知錯誤'
-      toast.error(`強制同步失敗：${errorMessage}`)
+      setForceSyncStep('error')
+      setForceSyncMessage(errorMessage)
     } finally {
       setIsLoading(false)
     }
@@ -973,6 +988,71 @@ export default function Dashboard() {
           currentWeek={currentWeek}
         />
       )}
+
+      {/* 強制重新同步彈窗 */}
+      <Dialog open={showForceSyncModal} onOpenChange={setShowForceSyncModal}>
+        <DialogContent
+          className="max-w-md"
+          showCloseButton={forceSyncStep !== 'syncing'}
+          onInteractOutside={(e) => { if (forceSyncStep === 'syncing') e.preventDefault() }}
+          onEscapeKeyDown={(e) => { if (forceSyncStep === 'syncing') e.preventDefault() }}
+        >
+          {forceSyncStep === 'syncing' && (
+            <>
+              <DialogHeader>
+                <DialogTitle className="flex items-center gap-2">
+                  <Loader2 className="w-5 h-5 animate-spin text-orange-600" />
+                  正在強制重新同步...
+                </DialogTitle>
+              </DialogHeader>
+              <div className="rounded-lg border border-orange-200 bg-orange-50 p-4 text-center space-y-1">
+                <div className="text-orange-900">正在刪除並重新建立今天以後的所有事件...</div>
+                <div className="text-sm text-orange-700">請稍候，不要關閉此視窗</div>
+              </div>
+            </>
+          )}
+
+          {forceSyncStep === 'success' && (
+            <>
+              <DialogHeader>
+                <DialogTitle className="flex items-center gap-2 text-green-600">
+                  <Check className="w-5 h-5" />
+                  強制同步完成！
+                </DialogTitle>
+              </DialogHeader>
+              <div className="rounded-lg border border-green-200 bg-green-50 p-4 text-center">
+                <div className="text-green-900">{forceSyncMessage}</div>
+              </div>
+              <button
+                onClick={() => { setShowForceSyncModal(false); setForceSyncStep('syncing') }}
+                className="w-full rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90"
+              >
+                關閉
+              </button>
+            </>
+          )}
+
+          {forceSyncStep === 'error' && (
+            <>
+              <DialogHeader>
+                <DialogTitle className="flex items-center gap-2 text-red-600">
+                  <AlertCircle className="w-5 h-5" />
+                  強制同步失敗
+                </DialogTitle>
+              </DialogHeader>
+              <div className="rounded-lg border border-red-200 bg-red-50 p-4">
+                <div className="text-sm text-red-700">{forceSyncMessage || '未知錯誤'}</div>
+              </div>
+              <button
+                onClick={() => { setShowForceSyncModal(false); setForceSyncStep('syncing') }}
+                className="w-full rounded-md border px-4 py-2 text-sm font-medium hover:bg-muted"
+              >
+                關閉
+              </button>
+            </>
+          )}
+        </DialogContent>
+      </Dialog>
 
       {/* 認證錯誤彈窗 */}
       {authError && (

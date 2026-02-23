@@ -205,7 +205,12 @@ export default function FloatingSyncButton({
 
       {/* 同步對話框 */}
       <Dialog open={showDialog} onOpenChange={setShowDialog}>
-        <DialogContent className="max-w-md">
+        <DialogContent
+          className="max-w-md"
+          showCloseButton={syncStep !== 'syncing'}
+          onInteractOutside={(e) => { if (syncStep === 'syncing') e.preventDefault() }}
+          onEscapeKeyDown={(e) => { if (syncStep === 'syncing') e.preventDefault() }}
+        >
 
           {syncStep === 'syncing' && (
             <>
