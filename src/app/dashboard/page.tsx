@@ -6,7 +6,7 @@ import Link from 'next/link'
 import useSWR from 'swr'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Button } from '@/components/ui/button'
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import ScheduleTable from '@/components/schedule/ScheduleTable'
 import ScheduleTableSkeleton from '@/components/schedule/ScheduleTableSkeleton'
 import WeekNavigation from '@/components/schedule/WeekNavigation'
@@ -66,6 +66,7 @@ export default function Dashboard() {
   const [showForceSyncModal, setShowForceSyncModal] = useState(false)
   const [forceSyncStep, setForceSyncStep] = useState<'syncing' | 'success' | 'error'>('syncing')
   const [forceSyncMessage, setForceSyncMessage] = useState<string | null>(null)
+  const [forceSyncProgress, setForceSyncProgress] = useState<{ current: number; total: number; weekStart: string } | null>(null)
 
   // Initialize currentWeek on client side to avoid hydration mismatch
   useEffect(() => {
@@ -470,37 +471,74 @@ export default function Dashboard() {
     setShowForceSyncModal(true)
     setForceSyncStep('syncing')
     setForceSyncMessage(null)
+    setForceSyncProgress(null)
     setIsLoading(true)
+
     try {
-      const response = await fetch('/api/force-sync-all', { method: 'POST' })
-
-      if (response.status === 401) {
-        const errorData = await response.json().catch(() => ({}))
+      // Step 1: Get list of weeks to process
+      const weeksRes = await fetch('/api/force-sync-all/weeks')
+      if (weeksRes.status === 401) {
         setShowForceSyncModal(false)
-        if (errorData.error === 'reauth_required') {
-          handleAuthError({
-            response: {
-              status: 401,
-              data: { error: 'reauth_required', message: errorData.message || '需要重新認證 Google 帳戶' }
-            }
-          })
-        } else {
-          toast.error('登入逾期，請重新登入')
-          await signOut()
-        }
+        toast.error('登入逾期，請重新登入')
+        await signOut()
         return
       }
-
-      if (!response.ok) {
-        const errorData = await response.json().catch(() => ({}))
+      if (!weeksRes.ok) {
         setForceSyncStep('error')
-        setForceSyncMessage(errorData.error || '強制同步失敗')
+        setForceSyncMessage('無法取得週清單，請重試')
+        return
+      }
+      const { weeks } = await weeksRes.json() as { weeks: string[] }
+
+      if (weeks.length === 0) {
+        setForceSyncStep('success')
+        setForceSyncMessage('今天以後沒有任何事件需要同步')
         return
       }
 
-      const data = await response.json()
+      // Step 2: Process each week sequentially
+      let totalDeleted = 0
+      let totalCreated = 0
+      let totalErrors = 0
+
+      for (let i = 0; i < weeks.length; i++) {
+        const weekStart = weeks[i]
+        setForceSyncProgress({ current: i + 1, total: weeks.length, weekStart })
+
+        const res = await fetch(`/api/weeks/${weekStart}/force-sync`, { method: 'POST' })
+        const data = await res.json().catch(() => ({}))
+
+        if (res.status === 401) {
+          setShowForceSyncModal(false)
+          if (data.error === 'reauth_required') {
+            handleAuthError({
+              response: {
+                status: 401,
+                data: { error: 'reauth_required', message: data.message || '需要重新認證 Google 帳戶' }
+              }
+            })
+          } else {
+            toast.error('登入逾期，請重新登入')
+            await signOut()
+          }
+          return
+        }
+
+        if (!res.ok) {
+          setForceSyncStep('error')
+          setForceSyncMessage(`第 ${i + 1} 週（${weekStart}）失敗：${data.error || '未知錯誤'}`)
+          return
+        }
+
+        totalDeleted += data.deleted ?? 0
+        totalCreated += data.created ?? 0
+        totalErrors += data.errors ?? 0
+      }
+
       setForceSyncStep('success')
-      setForceSyncMessage(data.message || '強制重新同步完成！')
+      setForceSyncMessage(
+        `強制重新同步完成（${weeks.length} 週，刪除 ${totalDeleted}，新建 ${totalCreated}${totalErrors > 0 ? `，失敗 ${totalErrors}` : ''}）`
+      )
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : '未知錯誤'
       setForceSyncStep('error')
@@ -1004,10 +1042,27 @@ export default function Dashboard() {
                   <Loader2 className="w-5 h-5 animate-spin text-orange-600" />
                   正在強制重新同步...
                 </DialogTitle>
+                <DialogDescription>
+                  {forceSyncProgress
+                    ? `正在處理第 ${forceSyncProgress.current} / ${forceSyncProgress.total} 週`
+                    : '正在讀取週清單...'}
+                </DialogDescription>
               </DialogHeader>
-              <div className="rounded-lg border border-orange-200 bg-orange-50 p-4 text-center space-y-1">
-                <div className="text-orange-900">正在刪除並重新建立今天以後的所有事件...</div>
-                <div className="text-sm text-orange-700">請稍候，不要關閉此視窗</div>
+              <div className="rounded-lg border border-orange-200 bg-orange-50 p-4 space-y-3">
+                {forceSyncProgress && (
+                  <>
+                    <div className="text-sm text-orange-800 text-center font-medium">
+                      {forceSyncProgress.weekStart}
+                    </div>
+                    <div className="w-full bg-orange-200 rounded-full h-2">
+                      <div
+                        className="bg-orange-500 h-2 rounded-full transition-all duration-300"
+                        style={{ width: `${(forceSyncProgress.current / forceSyncProgress.total) * 100}%` }}
+                      />
+                    </div>
+                  </>
+                )}
+                <div className="text-sm text-orange-700 text-center">請稍候，不要關閉此視窗</div>
               </div>
             </>
           )}
@@ -1019,6 +1074,7 @@ export default function Dashboard() {
                   <Check className="w-5 h-5" />
                   強制同步完成！
                 </DialogTitle>
+                <DialogDescription>所有 Google Calendar 事件已重新建立</DialogDescription>
               </DialogHeader>
               <div className="rounded-lg border border-green-200 bg-green-50 p-4 text-center">
                 <div className="text-green-900">{forceSyncMessage}</div>
@@ -1039,6 +1095,7 @@ export default function Dashboard() {
                   <AlertCircle className="w-5 h-5" />
                   強制同步失敗
                 </DialogTitle>
+                <DialogDescription>請檢查網路或 Google 權限後重試</DialogDescription>
               </DialogHeader>
               <div className="rounded-lg border border-red-200 bg-red-50 p-4">
                 <div className="text-sm text-red-700">{forceSyncMessage || '未知錯誤'}</div>
