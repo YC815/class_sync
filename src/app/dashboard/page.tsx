@@ -3,7 +3,7 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
 import { useSession, signOut, signIn } from 'next-auth/react'
 import Link from 'next/link'
-import useSWR from 'swr'
+import useSWR, { mutate as globalMutate } from 'swr'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Button } from '@/components/ui/button'
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog'
@@ -439,6 +439,14 @@ export default function Dashboard() {
       setPendingChanges(null)
       setIsPreventingReload(false)
 
+      // 使用 SWR global mutate 失效所有週次快取，確保其他週的 isSynced 狀態正確
+      await globalMutate(
+        (key) => typeof key === 'string' && key.startsWith('/api/weeks/'),
+        undefined,
+        { revalidate: true }
+      )
+      console.log('🔄 [Sync] Invalidated all week caches via SWR global mutate')
+
       const syncedEvents = (data.created || 0) + (data.linked || 0) + (data.replaced || 0)
       return {
         syncedEvents,
@@ -599,10 +607,10 @@ export default function Dashboard() {
       console.log('✅ [TestReset] Reset successful:', data)
       toast.success(data.message || '測試重置完成！')
 
-      // Force page reload to ensure all components refresh with new data
-      setTimeout(() => {
-        window.location.reload()
-      }, 1000) // Give user time to see the success message
+      await Promise.all([mutateCourses(), mutateBases()])
+      if (currentWeek) {
+        await loadWeekSchedule(currentWeek, true)
+      }
 
     } catch (error) {
       console.error('❌ [TestReset] Reset failed:', error)
