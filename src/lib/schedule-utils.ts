@@ -24,7 +24,9 @@ export function getSemester(date: Date = new Date()): string {
 
   const semester = `${academicYear}-${semesterNumber}`;
 
-  console.log(`[getSemester] 計算學期: ${date.toISOString().split('T')[0]} → ${semester}`);
+  if (process.env.NODE_ENV !== 'production') {
+    console.log(`[getSemester] 計算學期: ${date.toISOString().split('T')[0]} → ${semester}`);
+  }
 
   return semester;
 }
@@ -53,7 +55,9 @@ export function calculateAcademicWeek(date: Date = new Date(), semester?: string
   const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
   const weekNumber = Math.max(1, Math.ceil(diffDays / 7));
 
-  console.log(`[calculateAcademicWeek] 計算週次: 學期=${targetSemester}, 日期=${date.toISOString().split('T')[0]}, 週次=${weekNumber}`);
+  if (process.env.NODE_ENV !== 'production') {
+    console.log(`[calculateAcademicWeek] 計算週次: 學期=${targetSemester}, 日期=${date.toISOString().split('T')[0]}, 週次=${weekNumber}`);
+  }
 
   return weekNumber;
 }
@@ -71,12 +75,14 @@ export function getWeekStart(date: Date): Date {
   d.setDate(d.getDate() + diff)
   d.setHours(0, 0, 0, 0)
   
-  console.log('getWeekStart:', {
-    inputDate: date.toISOString(),
-    dayOfWeek: day,
-    diff: diff,
-    weekStart: d.toISOString()
-  })
+  if (process.env.NODE_ENV !== 'production') {
+    console.log('getWeekStart:', {
+      inputDate: date.toISOString(),
+      dayOfWeek: day,
+      diff: diff,
+      weekStart: d.toISOString()
+    })
+  }
   
   return d
 }

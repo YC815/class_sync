@@ -59,11 +59,13 @@ export class GoogleCalendarService {
     // Include Sunday events by setting timeMax to next Monday 00:00
     weekEnd.setDate(weekStart.getDate() + 7)
 
-    console.log('🔍 [GoogleCalendar] Listing events:', {
-      weekStart: weekStart.toISOString(),
-      weekEnd: weekEnd.toISOString(),
-      calendarId: 'primary'
-    })
+    if (process.env.NODE_ENV !== 'production') {
+      console.log('🔍 [GoogleCalendar] Listing events:', {
+        weekStart: weekStart.toISOString(),
+        weekEnd: weekEnd.toISOString(),
+        calendarId: 'primary'
+      })
+    }
 
     const response = await this.calendar.events.list({
       calendarId: 'primary',
@@ -73,65 +75,56 @@ export class GoogleCalendarService {
       orderBy: 'startTime',
     })
 
-    console.log('🔍 [GoogleCalendar] Found events:', response.data.items?.length || 0)
-
-    // Log all events first
-    console.log('🔍 [GoogleCalendar] All events found:', (response.data.items || []).map(event => ({
-      id: event.id,
-      summary: event.summary,
-      start: event.start?.dateTime,
-      hasExtendedProps: !!event.extendedProperties?.private,
-      source: event.extendedProperties?.private?.source,
-      hasDescription: !!event.description,
-      descriptionSnippet: event.description?.substring(0, 100)
-    })))
+    if (process.env.NODE_ENV !== 'production') {
+      console.log('🔍 [GoogleCalendar] Found events:', response.data.items?.length || 0)
+    }
 
     // Filter for events created by our app (using extendedProperties.private.source)
     const ourEvents = (response.data.items || []).filter(event =>
       event.extendedProperties?.private?.source === 'class_sync'
     )
 
-    console.log('🔍 [GoogleCalendar] Our events (filtered):', ourEvents.length)
-    console.log('🔍 [GoogleCalendar] Our events details:', ourEvents.map(e => ({
-      id: e.id,
-      summary: e.summary,
-      start: e.start,
-      extendedProperties: e.extendedProperties,
-      description: e.description?.substring(0, 200) + (e.description && e.description.length > 200 ? '...' : '')
-    })))
+    if (process.env.NODE_ENV !== 'production') {
+      console.log('🔍 [GoogleCalendar] Our events (filtered):', ourEvents.length)
+    }
 
     return ourEvents as CalendarEvent[]
   }
 
   async createEvent(event: CalendarEvent): Promise<string> {
-    console.log('➕ [GoogleCalendar] Creating event:', {
-      summary: event.summary,
-      start: event.start,
-      end: event.end,
-      location: event.location,
-      extendedProperties: event.extendedProperties
-    })
+    if (process.env.NODE_ENV !== 'production') {
+      console.log('➕ [GoogleCalendar] Creating event:', {
+        summary: event.summary,
+        start: event.start,
+        end: event.end,
+        location: event.location,
+        extendedProperties: event.extendedProperties
+      })
+    }
 
     const response = await this.calendar.events.insert({
       calendarId: 'primary',
       requestBody: event,
     })
 
-    console.log('✅ [GoogleCalendar] Event created with ID:', response.data.id)
-    console.log('✅ [GoogleCalendar] Event URL:', response.data.htmlLink)
+    if (process.env.NODE_ENV !== 'production') {
+      console.log('✅ [GoogleCalendar] Event created with ID:', response.data.id)
+    }
 
     return response.data.id!
   }
 
   async updateEvent(eventId: string, event: CalendarEvent): Promise<void> {
-    console.log('🔄 [GoogleCalendar] Updating event:', {
-      eventId,
-      summary: event.summary,
-      start: event.start,
-      end: event.end,
-      location: event.location,
-      extendedProperties: event.extendedProperties
-    })
+    if (process.env.NODE_ENV !== 'production') {
+      console.log('🔄 [GoogleCalendar] Updating event:', {
+        eventId,
+        summary: event.summary,
+        start: event.start,
+        end: event.end,
+        location: event.location,
+        extendedProperties: event.extendedProperties
+      })
+    }
 
     const response = await this.calendar.events.update({
       calendarId: 'primary',
@@ -139,19 +132,24 @@ export class GoogleCalendarService {
       requestBody: event,
     })
 
-    console.log('✅ [GoogleCalendar] Event updated:', response.data.id)
-    console.log('✅ [GoogleCalendar] Event URL:', response.data.htmlLink)
+    if (process.env.NODE_ENV !== 'production') {
+      console.log('✅ [GoogleCalendar] Event updated:', response.data.id)
+    }
   }
 
   async deleteEvent(eventId: string): Promise<void> {
-    console.log('🗑️ [GoogleCalendar] Deleting event:', eventId)
+    if (process.env.NODE_ENV !== 'production') {
+      console.log('🗑️ [GoogleCalendar] Deleting event:', eventId)
+    }
 
     await this.calendar.events.delete({
       calendarId: 'primary',
       eventId,
     })
 
-    console.log('✅ [GoogleCalendar] Event deleted:', eventId)
+    if (process.env.NODE_ENV !== 'production') {
+      console.log('✅ [GoogleCalendar] Event deleted:', eventId)
+    }
   }
 
   /**
@@ -185,29 +183,23 @@ export class GoogleCalendarService {
     scheduleEvent: ScheduleEvent,
     weekStart: Date
   ): CalendarEvent {
-    console.log('🔄 [GoogleCalendar] Converting schedule event to calendar event:', {
-      courseName: scheduleEvent.courseName,
-      weekday: scheduleEvent.weekday,
-      periodStart: scheduleEvent.periodStart,
-      periodEnd: scheduleEvent.periodEnd,
-      weekStart: weekStart.toISOString()
-    })
+    if (process.env.NODE_ENV !== 'production') {
+      console.log('🔄 [GoogleCalendar] Converting schedule event to calendar event:', {
+        courseName: scheduleEvent.courseName,
+        weekday: scheduleEvent.weekday,
+        periodStart: scheduleEvent.periodStart,
+        periodEnd: scheduleEvent.periodEnd,
+        weekStart: weekStart.toISOString()
+      })
+    }
 
     const eventDate = new Date(weekStart)
-    console.log('📅 [GoogleCalendar] Date calculation:', {
-      weekStart: weekStart.toISOString(),
-      weekday: scheduleEvent.weekday,
-      weekStartDay: weekStart.getDay(),
-      daysToAdd: scheduleEvent.weekday - 1,
-      beforeSetDate: eventDate.toISOString()
-    })
     
     // Fix: Use setDate() correctly to handle month boundaries
     // weekday is 1-based (Monday=1, Tuesday=2, etc.)
     // weekStart is guaranteed to be Monday, so we add (weekday - 1) days
     const daysToAdd = scheduleEvent.weekday - 1
     eventDate.setDate(eventDate.getDate() + daysToAdd)
-    console.log('📅 [GoogleCalendar] Final event date:', eventDate.toISOString())
 
     const startTime = this.getPeriodTime(scheduleEvent.periodStart, true)
     const endTime = this.getPeriodTime(scheduleEvent.periodEnd, false)
