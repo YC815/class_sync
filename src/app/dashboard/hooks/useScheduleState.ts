@@ -93,7 +93,7 @@ export function useScheduleState(): UseScheduleStateReturn {
 
   const loadWeekSchedule = useCallback(async (
     week: Date,
-    skipSyncDeleted = false,
+    skipSyncDeleted = true, // 預設跳過 sync-deleted，減少不必要的 Google API 調用
     preserveLocalChanges = false
   ): Promise<void> => {
     const weekStartStr = formatDateLocal(week)
