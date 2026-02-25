@@ -40,8 +40,15 @@
 - ✅ ~~#5~~ **auth.ts signIn callback** - 經查證已實作區分處理（見 commit `36d4eda`）
 
 **P2（效能提升）**
-- ✅ **#8** SWR global mutate 修復  
-  **Commit:** `42a0185` - fix: use SWR global mutate to refresh all week caches after sync
+- ✅ **#7** ScheduleTable IIFE 優化 + `getWeekdayDates` useMemo  
+  **Commit:** `2091385` - perf: optimize ScheduleTable and add localStorage versioning
+  - 提取 IIFE 為獨立輔助函數：getCourseSelectValue, renderContinuationOption 等
+  - 使用 useMemo 快取 weekdayDates，避免每次渲染重新計算
+  - 提升 React 渲染效能
+
+- ✅ **#8** 減少 sync-deleted 自動觸發 + SWR global mutate  
+  **Commit:** `2091385` + `42a0185`
+  - 將 `skipSyncDeleted` 預設改為 `true`，避免每次切換週自動呼叫 Google API
   - 同步成功後使用 global mutate 失效所有 `/api/weeks/*` 快取
   - 確保所有週次的 `isSynced` 狀態正確反映
 
@@ -59,6 +66,13 @@
   - 使用 `process.env.NODE_ENV !== 'production'` 條件判斷
   - 減少生產環境噪音，避免敏感資訊洩漏
 
+- ✅ **#12** `localStorage` 加入版本號  
+  **Commit:** `2091385` - perf: optimize ScheduleTable and add localStorage versioning
+  - 加入 SCHEMA_VERSION 常數（目前為 '1'）
+  - 儲存資料包含 version、data、timestamp 欄位
+  - 版本不符時自動清除舊資料，避免 schema 變更導致的資料損壞
+  - 解析錯誤時優雅降級
+
 **UI/UX 改進**
 - ✅ **行動版觸控目標優化**  
   **Commit:** `c5e86fd` - fix: responsive dual-layout for mobile touch targets (44px minimum)
@@ -74,15 +88,15 @@
 
 ### P1（架構安全）- 已全部完成 ✅
 
-### P2（效能提升）- 待修復
-1. ~~#7~~ ScheduleTable 中 IIFE 提取為函數 + `getWeekdayDates` 加 `useMemo`
-2. ~~#8~~ 每次切換週不再自動觸發 `sync-deleted`（避免多餘的 Google API 調用）
+### P2（效能提升）- 已全部完成 ✅
+1. ✅ ~~#7~~ ScheduleTable 中 IIFE 提取為函數 + `getWeekdayDates` 加 `useMemo` - **已完成**
+2. ✅ ~~#8~~ 每次切換週不再自動觸發 `sync-deleted`（避免多餘的 Google API 調用）- **已完成**
 3. ✅ ~~#9~~ `window.location.reload()` 改為 SWR mutate - **已完成**
 
-### P3（程式碼品質）- 待修復
-4. ~~#10~~ `dashboard/page.tsx` 拆分為自定義 hooks - **已完成**
-5. ~~#11~~ 移除 production console.log - **已完成**
-6. **#12** `localStorage` 加入版本號 - 待修復
+### P3（程式碼品質）- 已全部完成 ✅
+4. ✅ ~~#10~~ `dashboard/page.tsx` 拆分為自定義 hooks - **已完成**
+5. ✅ ~~#11~~ 移除 production console.log - **已完成**
+6. ✅ ~~#12~~ `localStorage` 加入版本號 - **已完成**
 
 ---
 
