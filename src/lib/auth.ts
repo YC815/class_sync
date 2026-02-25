@@ -25,10 +25,11 @@ export const authOptions: NextAuthOptions = {
       console.log('SignIn callback:', { user, account: account?.provider, profile: profile?.sub })
       
       if (account?.provider === 'google' && user?.email && profile?.sub) {
+        let userAlreadyExists = false
         try {
           // Use Google's sub ID as user ID for consistency
           const userId = profile.sub
-          
+
           // Check if user exists by email first, then by ID
           let existingUser = await prisma.user.findUnique({
             where: { email: user.email }
@@ -39,6 +40,8 @@ export const authOptions: NextAuthOptions = {
               where: { id: userId }
             })
           }
+
+          userAlreadyExists = !!existingUser
 
           if (!existingUser) {
             // Create new user in database
@@ -59,12 +62,15 @@ export const authOptions: NextAuthOptions = {
             })
             console.log(`Updated user ID: ${existingUser.id} -> ${userId} (${user.email})`)
           }
-          
+
           // Update user ID for the session
           user.id = userId
         } catch (error) {
           console.error('Error managing user:', error)
-          // Still allow sign in even if user creation fails
+          if (!userAlreadyExists) {
+            return false  // 新用戶建立失敗，阻止登入以避免 FK 錯誤
+          }
+          // 既有用戶更新失敗，可繼續
         }
       }
       return true

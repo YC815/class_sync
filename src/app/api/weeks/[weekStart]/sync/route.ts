@@ -71,7 +71,7 @@ export async function POST(
         accessToken,
         refreshToken,
         expiresAt
-      })
+      }, userId)
       console.log('✅ [Sync] Google access token validated')
     } catch (error) {
       console.error('❌ [Sync] Token validation/refresh failed:', error)

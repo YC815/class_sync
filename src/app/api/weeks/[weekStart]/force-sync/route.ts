@@ -36,7 +36,7 @@ export async function POST(
 
     let validAccessToken: string
     try {
-      validAccessToken = await ensureGoogleAccess({ accessToken, refreshToken, expiresAt })
+      validAccessToken = await ensureGoogleAccess({ accessToken, refreshToken, expiresAt }, session.user.id)
     } catch (error) {
       if (error instanceof ReauthRequiredError) {
         return NextResponse.json({ error: 'reauth_required', message: error.message }, { status: 401 })

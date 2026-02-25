@@ -100,11 +100,14 @@ async function migrate() {
       try {
         console.log(`  遷移 Week ${week.id} (${week.weekStart.toISOString().split('T')[0]})...`)
 
+        // Migration script uses empty bases array since it's one-time migration
+        // from old format without FK constraints
         const result = await writeScheduleAsEvents(
           week.userId,
           week.weekStart,
           schedule,
-          prisma
+          prisma,
+          []
         )
 
         console.log(`    ✅ 成功建立 ${result.eventsCreated} 個 events`)

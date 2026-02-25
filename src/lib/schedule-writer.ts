@@ -1,6 +1,25 @@
 import { PrismaClient } from '@/generated/prisma'
-import { WeekSchedule, ScheduleEvent } from './types'
+import { WeekSchedule, ScheduleEvent, Base } from './types'
 import { mergeAdjacentPeriods, validateScheduleEvent } from './schedule-utils'
+
+/**
+ * 建立 base/room 名稱到 ID 的查詢 Map
+ */
+function createLookupMaps(bases: Base[]) {
+  const baseNameToId = new Map<string, string>()
+  const roomNameToId = new Map<string, string>() // key: "baseName-roomName"
+
+  for (const base of bases) {
+    baseNameToId.set(base.name, base.id)
+    if (base.rooms) {
+      for (const room of base.rooms) {
+        roomNameToId.set(`${base.name}-${room.name}`, room.id)
+      }
+    }
+  }
+
+  return { baseNameToId, roomNameToId }
+}
 
 /**
  * 將 WeekSchedule 轉換為 Event 記錄陣列（未合併）
@@ -8,9 +27,11 @@ import { mergeAdjacentPeriods, validateScheduleEvent } from './schedule-utils'
 function scheduleToEvents(
   schedule: WeekSchedule,
   userId: string,
-  weekStart: Date
+  weekStart: Date,
+  bases: Base[]
 ): Array<Omit<import('@/generated/prisma').Event, 'id' | 'createdAt' | 'updatedAt'>> {
   const events: Array<Omit<import('@/generated/prisma').Event, 'id' | 'createdAt' | 'updatedAt'>> = []
+  const { baseNameToId, roomNameToId } = createLookupMaps(bases)
 
   Object.entries(schedule).forEach(([dayStr, periods]) => {
     const weekday = parseInt(dayStr)
@@ -35,6 +56,35 @@ function scheduleToEvents(
         roomName = parts[1]?.trim() || null
       }
 
+      // 查詢 baseId 和 roomId
+      let baseId: string | null = null
+      let roomId: string | null = null
+
+      if (baseName) {
+        baseId = baseNameToId.get(baseName) || null
+        if (!baseId) {
+          // 嚴格校驗：如果 baseName 存在但找不到對應 ID，拋出錯誤
+          throw new Error(
+            `Invalid base name "${baseName}" for event "${cell.courseName}". ` +
+            `Available bases: ${Array.from(baseNameToId.keys()).join(', ')}`
+          )
+        }
+
+        if (roomName) {
+          roomId = roomNameToId.get(`${baseName}-${roomName}`) || null
+          if (!roomId) {
+            // 嚴格校驗：如果 roomName 存在但找不到對應 ID，拋出錯誤
+            throw new Error(
+              `Invalid room name "${roomName}" in base "${baseName}" for event "${cell.courseName}". ` +
+              `Available rooms: ${Array.from(roomNameToId.keys())
+                .filter(k => k.startsWith(`${baseName}-`))
+                .map(k => k.replace(`${baseName}-`, ''))
+                .join(', ')}`
+            )
+          }
+        }
+      }
+
       events.push({
         userId,
         weekStart,
@@ -43,8 +93,8 @@ function scheduleToEvents(
         periodEnd: period, // 先拆分，稍後合併
         courseId: cell.courseId || null,
         courseName: cell.courseName,
-        baseId: null, // 暫不處理 baseId/roomId 的 lookup
-        roomId: null,
+        baseId,
+        roomId,
         baseName,
         roomName,
         address: cell.address || null,
@@ -72,12 +122,13 @@ export async function writeScheduleAsEvents(
   userId: string,
   weekStart: Date,
   schedule: WeekSchedule,
-  prismaClient: PrismaClient
+  prismaClient: PrismaClient,
+  bases: Base[]
 ): Promise<{ eventsCreated: number }> {
   console.log(`[writeScheduleAsEvents] 開始寫入 events，週開始: ${weekStart.toISOString()}`)
 
   // Step 1: 轉換 + 驗證
-  const rawEvents = scheduleToEvents(schedule, userId, weekStart)
+  const rawEvents = scheduleToEvents(schedule, userId, weekStart, bases)
   console.log(`[writeScheduleAsEvents] 解析出 ${rawEvents.length} 個原始 events`)
 
   // 驗證每個 event
@@ -110,7 +161,19 @@ export async function writeScheduleAsEvents(
   const merged = mergeAdjacentPeriods(scheduleEvents)
   console.log(`[writeScheduleAsEvents] 合併後剩餘 ${merged.length} 個 events`)
 
-  // Step 3: 事務寫入
+  // Step 3: 事務前查詢現有 calendarEventId，避免 delete/create 後遺失同步狀態
+  const existingEvents = await prismaClient.event.findMany({
+    where: { userId, weekStart },
+    select: { weekday: true, periodStart: true, periodEnd: true, courseName: true, calendarEventId: true }
+  })
+  const calendarIdMap = new Map(
+    existingEvents.map(e => [
+      `${e.weekday}-${e.periodStart}-${e.periodEnd}-${e.courseName}`,
+      e.calendarEventId
+    ])
+  )
+
+  // Step 4: 事務寫入
   const result = await prismaClient.$transaction(async tx => {
     // 刪除該週的所有事件
     const deleteResult = await tx.event.deleteMany({
@@ -150,14 +213,16 @@ export async function writeScheduleAsEvents(
           periodEnd: mergedEvent.periodEnd,
           courseId: mergedEvent.courseId || null,
           courseName: mergedEvent.courseName,
-          baseId: null, // 暫不處理 baseId/roomId 的 lookup
-          roomId: null,
+          baseId: originalEvent?.baseId || null,
+          roomId: originalEvent?.roomId || null,
           baseName: originalEvent?.baseName || null,
           roomName: originalEvent?.roomName || null,
           address: originalEvent?.address || null,
           overrideTitle: false,
           overrideLocation: false,
-          calendarEventId: null, // 新建事件，尚未同步
+          calendarEventId: calendarIdMap.get(
+            `${mergedEvent.weekday}-${mergedEvent.periodStart}-${mergedEvent.periodEnd}-${mergedEvent.courseName}`
+          ) ?? null,
           seriesId: mergedEvent.seriesId || null
         }
       })

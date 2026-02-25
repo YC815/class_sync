@@ -51,12 +51,19 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Invalid schedule data', errors }, { status: 400 })
     }
 
+    // 查詢使用者的 bases 和 rooms 用於 ID lookup
+    const bases = await prisma.base.findMany({
+      where: { userId },
+      include: { rooms: true }
+    })
+
     // 使用新的統一寫入邏輯：將 WeekSchedule 寫入 events 表
     const result = await writeScheduleAsEvents(
       userId,
       new Date(weekStart),
       data as WeekSchedule,
-      prisma
+      prisma,
+      bases
     )
 
     console.log(`[Admin API] Successfully wrote schedule for week ${weekStart}: ${result.eventsCreated} events created`)

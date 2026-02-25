@@ -32,7 +32,7 @@ export async function POST() {
 
     let validAccessToken: string
     try {
-      validAccessToken = await ensureGoogleAccess({ accessToken, refreshToken, expiresAt })
+      validAccessToken = await ensureGoogleAccess({ accessToken, refreshToken, expiresAt }, session.user.id)
       console.log('✅ [SyncAll] Google access token validated')
     } catch (error) {
       console.error('❌ [SyncAll] Token validation/refresh failed:', error)

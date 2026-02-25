@@ -1,3 +1,5 @@
+import { prisma } from '@/lib/prisma'
+
 interface TokenInfo {
   accessToken: string
   refreshToken?: string
@@ -18,7 +20,7 @@ export class ReauthRequiredError extends Error {
   }
 }
 
-export async function ensureGoogleAccess(tokenInfo: TokenInfo): Promise<string> {
+export async function ensureGoogleAccess(tokenInfo: TokenInfo, userId?: string): Promise<string> {
   const { accessToken, refreshToken, expiresAt } = tokenInfo
 
   if (!refreshToken) {
@@ -68,6 +70,16 @@ export async function ensureGoogleAccess(tokenInfo: TokenInfo): Promise<string> 
 
     const refreshedTokens: RefreshTokenResponse = await response.json()
     console.log('✅ [Auth] Token refreshed successfully')
+
+    if (userId) {
+      await prisma.account.updateMany({
+        where: { userId, provider: 'google' },
+        data: {
+          access_token: refreshedTokens.access_token,
+          expires_at: Math.floor((Date.now() + refreshedTokens.expires_in * 1000) / 1000)
+        }
+      })
+    }
 
     return refreshedTokens.access_token
   } catch (error) {

@@ -195,8 +195,8 @@ export default function ScheduleTable({
           ...currentCell,
           base: baseId === 'none' ? undefined : base?.name,
           room: undefined, // 重設教室選擇
-          placeId: baseId === 'none' ? undefined : base?.placeId,
-          address: baseId === 'none' ? undefined : base?.address,
+          placeId: baseId === 'none' ? undefined : base?.placeId || undefined,
+          address: baseId === 'none' ? undefined : base?.address || undefined,
           isSynced: false, // 基地變更標記為未同步
           calendarEventId: undefined
         }
@@ -412,9 +412,9 @@ export default function ScheduleTable({
                           >
                             <SelectTrigger className={`w-full h-auto min-h-8 text-xs items-start ${
                               cell?.isSynced
-                                ? 'border-green-300 bg-green-25'
+                                ? 'border-green-300 bg-green-50'
                                 : cell
-                                  ? 'border-yellow-300 bg-yellow-25 border-dashed'
+                                  ? 'border-yellow-300 bg-yellow-50 border-dashed'
                                   : 'border-dashed'
                             }`}>
                               <SelectValue>

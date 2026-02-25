@@ -52,12 +52,19 @@ export async function PATCH(request: NextRequest) {
 
     const userId = session.user.id
 
+    // 查詢使用者的 bases 和 rooms 用於 ID lookup
+    const bases = await prisma.base.findMany({
+      where: { userId },
+      include: { rooms: true }
+    })
+
     // 使用新的統一寫入邏輯：將 WeekSchedule 寫入 events 表
     const result = await writeScheduleAsEvents(
       userId,
       new Date(weekStart),
       data as WeekSchedule,
-      prisma
+      prisma,
+      bases
     )
 
     console.log(`[User PATCH] Successfully saved schedule for week ${weekStart}: ${result.eventsCreated} events created`)

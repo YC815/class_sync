@@ -8,8 +8,8 @@ export interface Course {
 export interface Base {
   id: string
   name: string
-  address?: string
-  placeId?: string
+  address?: string | null
+  placeId?: string | null
   isSingleRoom?: boolean
   rooms?: Room[]
   createdAt: Date
