@@ -24,7 +24,7 @@ import { loadLocalSchedule, saveLocalSchedule } from '@/lib/local-schedule'
 import { useNavbarHeight } from '@/lib/hooks'
 import { fetcher } from '@/lib/fetcher'
 import { toast } from 'sonner'
-import { HelpCircle, Loader2, Check, AlertCircle } from 'lucide-react'
+import { HelpCircle, Loader2, Check, AlertCircle, Download } from 'lucide-react'
 import { useAuthErrorHandler } from '@/hooks/useAuthErrorHandler'
 import { AuthErrorModal } from '@/components/auth/AuthErrorModal'
 
@@ -67,6 +67,9 @@ export default function Dashboard() {
   const [forceSyncStep, setForceSyncStep] = useState<'syncing' | 'success' | 'error'>('syncing')
   const [forceSyncMessage, setForceSyncMessage] = useState<string | null>(null)
   const [forceSyncProgress, setForceSyncProgress] = useState<{ current: number; total: number; weekStart: string } | null>(null)
+  const [showRayModal, setShowRayModal] = useState(false)
+  const [rayStep, setRayStep] = useState<'fetching' | 'success' | 'error'>('fetching')
+  const [rayMessage, setRayMessage] = useState<string | null>(null)
 
   // Initialize currentWeek on client side to avoid hydration mismatch
   useEffect(() => {
@@ -104,6 +107,26 @@ export default function Dashboard() {
     }
   }, [session?.error, handleAuthError])
 
+
+  const handleFetchSchedule = async () => {
+    setRayStep('fetching')
+    setRayMessage(null)
+    setShowRayModal(true)
+    try {
+      const response = await fetch('/api/ray/sync', { method: 'POST' })
+      const data = await response.json()
+      if (!response.ok) {
+        setRayMessage(data.message || '課表抓取失敗')
+        setRayStep('error')
+        return
+      }
+      setRayMessage(data.message)
+      setRayStep('success')
+    } catch {
+      setRayMessage('課表抓取失敗，請稍後再試')
+      setRayStep('error')
+    }
+  }
 
   const loadWeekScheduleRef = useRef<((week: Date, skipSyncDeleted?: boolean, preserveLocalChanges?: boolean) => Promise<void>) | undefined>(undefined)
 
@@ -729,6 +752,18 @@ export default function Dashboard() {
                         使用說明
                       </button>
 
+                      <button
+                        className="w-full text-left px-4 py-2 text-sm hover:bg-gray-50 flex items-center gap-2"
+                        onClick={async () => {
+                          setShowMobileMenu(false)
+                          await handleFetchSchedule()
+                        }}
+                        disabled={showRayModal && rayStep === 'fetching'}
+                      >
+                        {showRayModal && rayStep === 'fetching' ? <Loader2 className="w-4 h-4 animate-spin" /> : <Download className="w-4 h-4" />}
+                        抓取課表
+                      </button>
+
                       <a
                         href="https://docs.google.com/spreadsheets/d/1scxvMRoDHDc_ubV6fWd0rOcHpFzwMESrBmOtoHiezPc/edit?gid=0#gid=0"
                         target="_blank"
@@ -807,6 +842,18 @@ export default function Dashboard() {
                   </svg>
                   <span className="hidden md:inline">基礎課表</span>
                 </a>
+              </Button>
+
+              {/* 抓取課表按鈕 */}
+              <Button
+                variant="outline"
+                size="sm"
+                className="hidden sm:inline-flex gap-2"
+                onClick={handleFetchSchedule}
+                disabled={showRayModal && rayStep === 'fetching'}
+              >
+                {showRayModal && rayStep === 'fetching' ? <Loader2 className="w-4 h-4 animate-spin" /> : <Download className="w-4 h-4" />}
+                <span className="hidden md:inline">抓取課表</span>
               </Button>
 
               {/* Jilin Base Map Dropdown */}
@@ -1102,6 +1149,73 @@ export default function Dashboard() {
               </div>
               <button
                 onClick={() => { setShowForceSyncModal(false); setForceSyncStep('syncing') }}
+                className="w-full rounded-md border px-4 py-2 text-sm font-medium hover:bg-muted"
+              >
+                關閉
+              </button>
+            </>
+          )}
+        </DialogContent>
+      </Dialog>
+
+      {/* 抓取課表彈窗 */}
+      <Dialog open={showRayModal} onOpenChange={setShowRayModal}>
+        <DialogContent
+          className="max-w-md"
+          showCloseButton={rayStep !== 'fetching'}
+          onInteractOutside={(e) => { if (rayStep === 'fetching') e.preventDefault() }}
+          onEscapeKeyDown={(e) => { if (rayStep === 'fetching') e.preventDefault() }}
+        >
+          {rayStep === 'fetching' && (
+            <>
+              <DialogHeader>
+                <DialogTitle className="flex items-center gap-2">
+                  <Loader2 className="w-5 h-5 animate-spin text-blue-600" />
+                  正在抓取課表...
+                </DialogTitle>
+                <DialogDescription>正在從 RAY 系統同步課表資料</DialogDescription>
+              </DialogHeader>
+              <div className="rounded-lg border border-blue-200 bg-blue-50 p-4">
+                <div className="text-sm text-blue-700 text-center">請稍候，不要關閉此視窗</div>
+              </div>
+            </>
+          )}
+
+          {rayStep === 'success' && (
+            <>
+              <DialogHeader>
+                <DialogTitle className="flex items-center gap-2 text-green-600">
+                  <Check className="w-5 h-5" />
+                  抓取課表完成！
+                </DialogTitle>
+                <DialogDescription>課表資料已成功從 RAY 系統同步</DialogDescription>
+              </DialogHeader>
+              <div className="rounded-lg border border-green-200 bg-green-50 p-4 text-center">
+                <div className="text-green-900">{rayMessage}</div>
+              </div>
+              <button
+                onClick={() => { setShowRayModal(false); setRayStep('fetching') }}
+                className="w-full rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90"
+              >
+                關閉
+              </button>
+            </>
+          )}
+
+          {rayStep === 'error' && (
+            <>
+              <DialogHeader>
+                <DialogTitle className="flex items-center gap-2 text-red-600">
+                  <AlertCircle className="w-5 h-5" />
+                  抓取課表失敗
+                </DialogTitle>
+                <DialogDescription>請確認帳號格式或網路狀態後重試</DialogDescription>
+              </DialogHeader>
+              <div className="rounded-lg border border-red-200 bg-red-50 p-4">
+                <div className="text-sm text-red-700">{rayMessage || '未知錯誤'}</div>
+              </div>
+              <button
+                onClick={() => { setShowRayModal(false); setRayStep('fetching') }}
                 className="w-full rounded-md border px-4 py-2 text-sm font-medium hover:bg-muted"
               >
                 關閉
