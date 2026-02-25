@@ -1,6 +1,6 @@
 'use client'
 
-import React, { useState, useEffect } from 'react'
+import React, { useState } from 'react'
 import { 
   Table, 
   TableBody, 
@@ -16,20 +16,19 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select'
+import { Button } from '@/components/ui/button'
+import { Card, CardContent } from '@/components/ui/card'
 import AddTempCourseDialog from './AddTempCourseDialog'
 import { 
   WeekSchedule, 
   Course, 
   Base,
   ScheduleCell, 
-  WEEKDAYS, 
   WEEKDAYS_WITH_WEEKENDS,
   PERIODS, 
-  PERIOD_TIMES,
-  BASES,
-  ROOMS_BY_BASE,
-  BASE_INFO
+  PERIOD_TIMES
 } from '@/lib/types'
+import { ChevronLeft, ChevronRight } from 'lucide-react'
 
 interface ScheduleTableProps {
   schedule: WeekSchedule
@@ -51,6 +50,9 @@ export default function ScheduleTable({
     day: 0,
     period: 0
   })
+  
+  // Mobile: track selected day (1-7)
+  const [selectedDay, setSelectedDay] = useState(1)
 
 
   // Calculate dates for each weekday (including weekends)
@@ -317,8 +319,8 @@ export default function ScheduleTable({
         </div>
       </div>
 
-      {/* Schedule Table */}
-      <div className="border rounded-lg overflow-auto">
+      {/* Desktop: Schedule Table (hidden on mobile) */}
+      <div className="hidden md:block border rounded-lg overflow-auto">
         <Table className="min-w-[800px]">
           <TableHeader>
             <TableRow>
@@ -574,6 +576,183 @@ export default function ScheduleTable({
             ))}
           </TableBody>
         </Table>
+      </div>
+
+      {/* Mobile: Card-based Day View (visible only on mobile) */}
+      <div className="block md:hidden">
+        {/* Day Selector */}
+        <div className="flex items-center justify-between mb-4 bg-gray-50 rounded-lg p-2">
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => setSelectedDay(prev => prev > 1 ? prev - 1 : 7)}
+            className="h-11 w-11 p-0"
+          >
+            <ChevronLeft className="h-5 w-5" />
+          </Button>
+          <div className="text-center">
+            <div className="font-semibold text-lg">{WEEKDAYS_WITH_WEEKENDS[selectedDay - 1]}</div>
+            <div className="text-sm text-muted-foreground">{weekdayDates[selectedDay - 1]}</div>
+          </div>
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => setSelectedDay(prev => prev < 7 ? prev + 1 : 1)}
+            className="h-11 w-11 p-0"
+          >
+            <ChevronRight className="h-5 w-5" />
+          </Button>
+        </div>
+
+        {/* Period Cards */}
+        <div className="space-y-3">
+          {PERIODS.map(period => {
+            const cell = schedule[selectedDay]?.[period]
+            const isWeekend = selectedDay >= 6
+            
+            return (
+              <Card 
+                key={period}
+                className={`${
+                  isWeekend ? 'bg-gray-50' : ''
+                } ${
+                  cell?.isSynced
+                    ? 'border-l-4 border-l-green-400'
+                    : cell
+                      ? 'border-l-4 border-l-yellow-400'
+                      : ''
+                }`}
+              >
+                <CardContent className="p-4">
+                  <div className="flex items-center justify-between mb-3">
+                    <div className="flex items-center gap-2">
+                      <span className="font-semibold text-lg">第 {period} 節</span>
+                      <span className="text-sm text-muted-foreground">
+                        {PERIOD_TIMES[period as keyof typeof PERIOD_TIMES]}
+                      </span>
+                    </div>
+                    {cell?.isSynced && (
+                      <span className="text-xs bg-green-100 text-green-700 px-2 py-1 rounded">已同步</span>
+                    )}
+                    {cell && !cell.isSynced && (
+                      <span className="text-xs bg-yellow-100 text-yellow-700 px-2 py-1 rounded">未同步</span>
+                    )}
+                  </div>
+                  
+                  {/* Course Selector */}
+                  <Select
+                    value={(() => {
+                      if (cell?.isContinuation) return 'continuation'
+                      if (cell?.courseId) return cell.courseId
+                      if (cell?.isTemporary && cell?.courseName) {
+                        return 'temp'
+                      }
+                      return 'none'
+                    })()}
+                    onValueChange={(value) => handleCourseSelect(selectedDay, period, value)}
+                  >
+                    <SelectTrigger className={`w-full h-11 text-sm ${
+                      cell?.isSynced
+                        ? 'border-green-300 bg-green-50'
+                        : cell
+                          ? 'border-yellow-300 bg-yellow-50 border-dashed'
+                          : 'border-dashed'
+                    }`}>
+                      <SelectValue>
+                        {cell ? getCellContent(selectedDay, period) : (
+                          <span className="text-muted-foreground text-sm">選擇課程</span>
+                        )}
+                      </SelectValue>
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="none">無課程</SelectItem>
+                      {(() => {
+                        const isEvenPeriod = period % 2 === 0
+                        const previousPeriod = period - 1
+                        const previousCell = schedule[selectedDay]?.[previousPeriod]
+
+                        if (isEvenPeriod && previousCell) {
+                          const previousCourseName = previousCell.courseName ||
+                            courses.find(c => c.id === previousCell.courseId)?.name ||
+                            '未知課程'
+                          return (
+                            <SelectItem
+                              value="continuation"
+                              className="text-orange-600 font-medium"
+                            >
+                              連堂（{previousCourseName}）
+                            </SelectItem>
+                          )
+                        }
+                        return null
+                      })()}
+                      {courses.map(course => (
+                        <SelectItem key={course.id} value={course.id}>
+                          {course.name}
+                        </SelectItem>
+                      ))}
+                      <SelectItem value="other">其他...</SelectItem>
+                    </SelectContent>
+                  </Select>
+                  
+                  {/* Base & Room Selectors */}
+                  {cell && (
+                    <div className="mt-3 space-y-2">
+                      <Select
+                        value={(() => {
+                          if (!cell.base) return 'none'
+                          const base = bases.find(b => b.name === cell.base)
+                          return base?.id || 'none'
+                        })()}
+                        onValueChange={(value) => handleBaseSelect(selectedDay, period, value)}
+                      >
+                        <SelectTrigger className="w-full h-11 text-sm">
+                          <SelectValue placeholder="選擇基地" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="none">無基地</SelectItem>
+                          {bases.map((base) => (
+                            <SelectItem key={base.id} value={base.id}>
+                              {base.name}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                      
+                      {(() => {
+                        if (!cell.base) return null
+                        
+                        const base = bases.find(b => b.name === cell.base)
+                        if (!base || base.isSingleRoom || !base.rooms || base.rooms.length === 0) {
+                          return null
+                        }
+                        
+                        return (
+                          <Select
+                            value={cell.room || 'none'}
+                            onValueChange={(value) => handleRoomSelect(selectedDay, period, value)}
+                          >
+                            <SelectTrigger className="w-full h-11 text-sm">
+                              <SelectValue placeholder="選擇教室" />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="none">無教室</SelectItem>
+                              {base.rooms.map(room => (
+                                <SelectItem key={room.id} value={room.name}>
+                                  {room.name}
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        )
+                      })()}
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+            )
+          })}
+        </div>
       </div>
 
       <AddTempCourseDialog
