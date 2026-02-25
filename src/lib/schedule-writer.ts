@@ -166,12 +166,22 @@ export async function writeScheduleAsEvents(
     where: { userId, weekStart },
     select: { weekday: true, periodStart: true, periodEnd: true, courseName: true, calendarEventId: true }
   })
-  const calendarIdMap = new Map(
-    existingEvents.map(e => [
-      `${e.weekday}-${e.periodStart}-${e.periodEnd}-${e.courseName}`,
-      e.calendarEventId
-    ])
-  )
+  // 使用「降維拆解」策略：將每個 event 的 period 範圍展開為獨立的 key
+  // Key 格式: `${weekday}-${period}-${courseName}`
+  // 這樣即使合併範圍改變，只要任意節次匹配就能找到 calendarEventId
+  const calendarIdMap = new Map<string, string>()
+  existingEvents.forEach(e => {
+    if (e.calendarEventId) {
+      // 為該 event 涵蓋的每個節次都建立一個 entry
+      for (let p = e.periodStart; p <= e.periodEnd; p++) {
+        const key = `${e.weekday}-${p}-${e.courseName}`
+        // 只保留第一個找到的 calendarEventId（理論上應該只有一個）
+        if (!calendarIdMap.has(key)) {
+          calendarIdMap.set(key, e.calendarEventId)
+        }
+      }
+    }
+  })
 
   // Step 4: 事務寫入
   const result = await prismaClient.$transaction(async tx => {
@@ -220,9 +230,15 @@ export async function writeScheduleAsEvents(
           address: originalEvent?.address || null,
           overrideTitle: false,
           overrideLocation: false,
-          calendarEventId: calendarIdMap.get(
-            `${mergedEvent.weekday}-${mergedEvent.periodStart}-${mergedEvent.periodEnd}-${mergedEvent.courseName}`
-          ) ?? null,
+          // 查找合併範圍內任意一個節次是否有 calendarEventId
+          // 只要找到一個就繼承給合併後的 event（取第一個找到的）
+          calendarEventId: (() => {
+            for (let p = mergedEvent.periodStart; p <= mergedEvent.periodEnd; p++) {
+              const id = calendarIdMap.get(`${mergedEvent.weekday}-${p}-${mergedEvent.courseName}`)
+              if (id) return id
+            }
+            return null
+          })(),
           seriesId: mergedEvent.seriesId || null
         }
       })
