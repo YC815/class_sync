@@ -8,61 +8,81 @@
 
 ### 2026-02-25 已完成的修復
 
+**P0（直接 Bug）**
+- ✅ ~~#1~~ **Tailwind 顏色類檢查** - 經查證 `bg-green-25`/`bg-yellow-25` 不存在於當前版本，實際使用正確的 `bg-green-50`/`bg-yellow-50`
+- ✅ **#2** `fetcher.ts` 錯誤訊息增強  
+  **Commit:** `dae2bb7` - chore: enhance error handling and cleanup production logs
+  - 解析 JSON 錯誤響應，提供詳細錯誤訊息
+  - 支援 response text 和 status text fallback
+  - 截斷過長錯誤訊息（200 字元限制）
+
 **P1（架構安全）**
+- ✅ **#3** `writeScheduleAsEvents` 保留現有 `calendarEventId`  
+  **Commit:** `0742caf` - fix(schedule-writer): fix calendarEventId matching after merge
+  - 使用「降維拆解」策略：將 period 範圍展開為獨立 keys
+  - Key 格式：`${weekday}-${period}-${courseName}`（不依賴 periodEnd）
+  - 查詢時遍歷合併範圍，繼承第一個找到的 `calendarEventId`
+  - 解決合併後 period 範圍改變導致的匹配失敗問題
+
+- ✅ **#4** Token 刷新邏輯統一與持久化  
+  **Commit:** `7001757` - refactor(auth): unify token refresh logic and ensure DB persistence
+  - **Single Source of Truth**: 移除 JWT callback 的 refresh 邏輯，統一由 `ensureGoogleAccess()` 處理
+  - 確保 refreshed token（含 `refresh_token`）寫入 Prisma DB
+  - 補齊遺漏的 API routes：`/weeks/[weekStart]` 和 `/weeks/[weekStart]/sync-deleted`
+  - 避免 race condition，提升架構穩定性
+
 - ✅ **#5** `baseId`/`roomId` null 問題修復  
   **Commit:** `36d4eda` - fix: persist baseId and roomId in Event records with strict validation
   - 在 `writeScheduleAsEvents` 中加入 base/room ID lookup
   - 建立 baseName→baseId 和 roomName→roomId 對照表
   - 對無效的 base/room 名稱拋出明確錯誤
-  - 更新所有呼叫點（weeks route、admin set-schedule、migration script）
+
+- ✅ ~~#5~~ **auth.ts signIn callback** - 經查證已實作區分處理（見 commit `36d4eda`）
 
 **P2（效能提升）**
 - ✅ **#8** SWR global mutate 修復  
   **Commit:** `42a0185` - fix: use SWR global mutate to refresh all week caches after sync
   - 同步成功後使用 global mutate 失效所有 `/api/weeks/*` 快取
-  - 確保所有週次的 `isSynced` 狀態正確反映，無需手動管理 localStorage
+  - 確保所有週次的 `isSynced` 狀態正確反映
 
 **P3（程式碼品質）**
 - ✅ **#9** `dashboard/page.tsx` 拆分為自定義 hooks  
   **Commit:** `130c268` - refactor(dashboard): extract business logic into custom hooks
-  - 建立 `useScheduleState.ts` (256行) - 管理週次、課表狀態、本地儲存同步
-  - 建立 `useSyncOperations.ts` (291行) - Google Calendar 同步、強制同步、手動恢復
-  - 建立 `useRayIntegration.ts` (81行) - RAY 系統課表抓取
+  - 建立 `useScheduleState.ts` (256行)、`useSyncOperations.ts` (291行)、`useRayIntegration.ts` (81行)
   - `page.tsx` 從 1246 行縮減至 801 行 (-35%)
-  - 解決 `loadWeekScheduleRef` stale closure 反模式，改用 `useRef` 同步最新狀態
+  - 解決 `loadWeekScheduleRef` stale closure 反模式
+
+- ✅ **#10** 移除 production console.log  
+  **Commit:** `dae2bb7` - chore: enhance error handling and cleanup production logs
+  - `schedule-utils.ts`: `getSemester()`, `calculateAcademicWeek()`, `getWeekStart()`
+  - `google-calendar.ts`: `listEvents()`, `createEvent()`, `updateEvent()`, `deleteEvent()`
+  - 使用 `process.env.NODE_ENV !== 'production'` 條件判斷
+  - 減少生產環境噪音，避免敏感資訊洩漏
 
 **UI/UX 改進**
 - ✅ **行動版觸控目標優化**  
   **Commit:** `c5e86fd` - fix: responsive dual-layout for mobile touch targets (44px minimum)
   - 桌面版：保留現有表格佈局（手機版隱藏）
   - 手機版：新增卡片式日期檢視，觸控目標 44px+
-  - 日期選擇器支援前後導航
   - 所有選擇器使用 h-11 (44px) 最小高度
-  - 手機卡片顯示同步/未同步狀態指示器
 
 ---
 
 ## 待處理清單
 
-### P0（直接 Bug）- 待修復
-1. `bg-green-25` / `bg-yellow-25` → 改為 `bg-green-50` / `bg-yellow-50`（狀態顏色失效）
-2. `fetcher.ts` 加入非 2xx 錯誤 throw（SWR 錯誤不被捕獲）
+### P0（直接 Bug）- 已全部完成 ✅
 
-### P1（架構安全）- 待修復
-3. `writeScheduleAsEvents` 保留現有 `calendarEventId`（每次保存破壞同步狀態）
-4. `google-auth.ts` 刷新後的新 token 持久化回 DB
-5. ~~`auth.ts` signIn callback 區分可忽略 vs 阻止登入的失敗~~ ✅ **已檢視**（見 commit `36d4eda`）
-6. ~~`baseId`/`roomId` null 問題~~ ✅ **已完成**（見上方）
+### P1（架構安全）- 已全部完成 ✅
 
 ### P2（效能提升）- 待修復
-7. ScheduleTable 中 IIFE 提取為函數 + `getWeekdayDates` 加 `useMemo`
-8. 每次切換週不再自動觸發 `sync-deleted`（避免多餘的 Google API 調用）
-9. ~~`window.location.reload()` 改為 SWR mutate~~ ✅ **已完成**（見上方）
+1. ~~#7~~ ScheduleTable 中 IIFE 提取為函數 + `getWeekdayDates` 加 `useMemo`
+2. ~~#8~~ 每次切換週不再自動觸發 `sync-deleted`（避免多餘的 Google API 調用）
+3. ✅ ~~#9~~ `window.location.reload()` 改為 SWR mutate - **已完成**
 
 ### P3（程式碼品質）- 待修復
-10. ~~`dashboard/page.tsx` 拆分為自定義 hooks~~ ✅ **已完成**（見上方）
-11. 移除 production console.log（特別是 google-calendar.ts 中的事件詳情打印）
-12. `localStorage` 加入版本號
+4. ~~#10~~ `dashboard/page.tsx` 拆分為自定義 hooks - **已完成**
+5. ~~#11~~ 移除 production console.log - **已完成**
+6. **#12** `localStorage` 加入版本號 - 待修復
 
 ---
 
