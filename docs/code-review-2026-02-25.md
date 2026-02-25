@@ -4,6 +4,49 @@
 
 ---
 
+## 修改記錄
+
+### 2026-02-25 第二階段重構完成
+
+**Commit:** `130c268` - refactor(dashboard): extract business logic into custom hooks
+
+#### 已完成項目
+
+**P3 - 程式碼品質**
+- ✅ **#9** `dashboard/page.tsx` 拆分為自定義 hooks
+  - 建立 `useScheduleState.ts` (256行) - 管理週次、課表狀態、本地儲存同步
+  - 建立 `useSyncOperations.ts` (291行) - Google Calendar 同步、強制同步、手動恢復
+  - 建立 `useRayIntegration.ts` (81行) - RAY 系統課表抓取
+  - `page.tsx` 從 1246 行縮減至 801 行 (-35%)
+  - 解決 `loadWeekScheduleRef` stale closure 反模式，改用 `useRef` 同步最新狀態
+  - 保留 SWR global mutate 修復邏輯
+
+---
+
+## 待處理清單
+
+### P0（直接 Bug）- 待修復
+1. `bg-green-25` / `bg-yellow-25` → 改為 `bg-green-50` / `bg-yellow-50`（狀態顏色失效）
+2. `fetcher.ts` 加入非 2xx 錯誤 throw（SWR 錯誤不被捕獲）
+
+### P1（架構安全）- 待修復
+3. `writeScheduleAsEvents` 保留現有 `calendarEventId`（每次保存破壞同步狀態）
+4. `google-auth.ts` 刷新後的新 token 持久化回 DB
+5. `auth.ts` signIn callback 區分可忽略 vs 阻止登入的失敗
+
+### P2（效能提升）- 待修復
+6. ScheduleTable 中 IIFE 提取為函數 + `getWeekdayDates` 加 `useMemo`
+7. 每次切換週不再自動觸發 `sync-deleted`（避免多餘的 Google API 調用）
+8. `window.location.reload()` 改為 SWR mutate
+
+### P3（程式碼品質）- 待修復
+9. ~~`dashboard/page.tsx` 拆分為自定義 hooks~~ ✅ **已完成**
+10. 移除 production console.log（特別是 google-calendar.ts 中的事件詳情打印）
+11. `localStorage` 加入版本號
+12. `baseId`/`roomId` null 問題長期修復
+
+---
+
 ## 一、後端：邏輯流程 & 資料流
 
 ### Code Review
