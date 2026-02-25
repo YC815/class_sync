@@ -109,105 +109,88 @@ async function recoverEventsFromCalendar(
         const courseName = calEvent.summary || '未知課程'
         const eventKey = `${courseName}-${weekday}-${periodStart}-${periodEnd}`
 
-        // Check if we already have this event by content match
+        // If a DB event already exists for this slot, skip — don't re-link unsynced records
         if (existingEventKeys.has(eventKey)) {
-          console.log(`🔗 [Recovery] Found existing event by content match: ${eventKey}, linking with calendar ID`)
+          console.log(`⚠️ [Recovery] Skipping event with matching key: ${eventKey}, DB record already exists`)
+          continue
+        }
 
-          // Find the existing event and update it with calendar ID
-          const existingEvent = existingEvents.find(e =>
-            e.courseName === courseName &&
-            e.weekday === weekday &&
-            e.periodStart === periodStart &&
-            e.periodEnd === periodEnd &&
-            !e.calendarEventId
-          )
+        // Create new Event record
+        // Try to extract detailed location info from metadata first
+        let baseName: string | null = null
+        let roomName: string | null = null
+        let address: string | null = null
 
-          if (existingEvent) {
-            await prisma.event.update({
-              where: { id: existingEvent.id },
-              data: { calendarEventId: calEvent.id }
-            })
-            console.log(`🔗 [Recovery] Linked existing DB event ${existingEvent.id} with calendar event ${calEvent.id}`)
-            recoveredEvents++
-          }
+        // Extract from description metadata if available
+        const descMetadata = extractMetadataFromDescription(calEvent.description || '')
+        if (descMetadata?.location) {
+          console.log(`🔍 [Recovery] Found location in description metadata:`, descMetadata.location)
+          baseName = descMetadata.location
+          address = descMetadata.address || null
+        } else if ((metadata as any)?.location) {
+          // If extended properties has location info, use it
+          console.log(`🔍 [Recovery] Found location in extended properties:`, (metadata as any).location)
+          baseName = (metadata as any).location
+          address = (metadata as any).address || null
         } else {
-          // Create new Event record
-          // Try to extract detailed location info from metadata first
-          let baseName: string | null = null
-          let roomName: string | null = null
-          let address: string | null = null
+          // Fallback to calendar event location field
+          console.log(`🔍 [Recovery] Using calendar event location:`, calEvent.location)
+          baseName = calEvent.location || null
+          address = calEvent.location || null
+        }
 
-          // Extract from description metadata if available
-          const descMetadata = extractMetadataFromDescription(calEvent.description || '')
-          if (descMetadata?.location) {
-            console.log(`🔍 [Recovery] Found location in description metadata:`, descMetadata.location)
-            baseName = descMetadata.location
-            address = descMetadata.address || null
-          } else if ((metadata as any)?.location) {
-            // If extended properties has location info, use it
-            console.log(`🔍 [Recovery] Found location in extended properties:`, (metadata as any).location)
-            baseName = (metadata as any).location
-            address = (metadata as any).address || null
-          } else {
-            // Fallback to calendar event location field
-            console.log(`🔍 [Recovery] Using calendar event location:`, calEvent.location)
-            baseName = calEvent.location || null
-            address = calEvent.location || null
+        // Try to extract base and room from location string if it's in "base - room" format
+        if (baseName && baseName.includes(' - ')) {
+          const parts = baseName.split(' - ')
+          if (parts.length === 2) {
+            baseName = parts[0].trim()
+            roomName = parts[1].trim()
+            console.log(`🔍 [Recovery] Split location into base: "${baseName}" and room: "${roomName}"`)
           }
+        }
 
-          // Try to extract base and room from location string if it's in "base - room" format
-          if (baseName && baseName.includes(' - ')) {
-            const parts = baseName.split(' - ')
-            if (parts.length === 2) {
-              baseName = parts[0].trim()
-              roomName = parts[1].trim()
-              console.log(`🔍 [Recovery] Split location into base: "${baseName}" and room: "${roomName}"`)
-            }
-          }
-
-          // 確保 Week 記錄存在，如果不存在則創建
-          await prisma.week.upsert({
-            where: {
-              userId_weekStart: {
-                userId,
-                weekStart
-              }
-            },
-            update: {},
-            create: {
+        // 確保 Week 記錄存在，如果不存在則創建
+        await prisma.week.upsert({
+          where: {
+            userId_weekStart: {
               userId,
               weekStart
             }
-          })
+          },
+          update: {},
+          create: {
+            userId,
+            weekStart
+          }
+        })
 
-          const newEvent = await prisma.event.create({
-            data: {
-              userId,
-              weekStart,
-              weekday,
-              periodStart,
-              periodEnd,
-              courseId: metadata?.courseId || null,
-              courseName,
-              calendarEventId: calEvent.id,
-              seriesId: metadata?.seriesId || null,
-              baseName: baseName,
-              roomName: roomName,
-              address: address,
-            }
-          })
-
-          console.log(`✅ [Recovery] Created new Event record:`, {
-            id: newEvent.id,
-            calendarEventId: calEvent.id,
-            courseName,
+        const newEvent = await prisma.event.create({
+          data: {
+            userId,
+            weekStart,
             weekday,
             periodStart,
-            periodEnd
-          })
+            periodEnd,
+            courseId: metadata?.courseId || null,
+            courseName,
+            calendarEventId: calEvent.id,
+            seriesId: metadata?.seriesId || null,
+            baseName: baseName,
+            roomName: roomName,
+            address: address,
+          }
+        })
 
-          recoveredEvents++
-        }
+        console.log(`✅ [Recovery] Created new Event record:`, {
+          id: newEvent.id,
+          calendarEventId: calEvent.id,
+          courseName,
+          weekday,
+          periodStart,
+          periodEnd
+        })
+
+        recoveredEvents++
       } catch (eventError) {
         const errorMsg = `Failed to recover event ${calEvent.id}: ${eventError}`
         console.error('❌ [Recovery]', errorMsg)

@@ -165,32 +165,9 @@ export async function POST(
           courseId: event.courseId
         })
         
-        // 從資料庫載入課程連結資訊
-        let courseLinks: { name: string; url: string }[] = []
-        if (event.courseId) {
-          const courseWithLinks = await prisma.course.findUnique({
-            where: { id: event.courseId },
-            include: {
-              links: {
-                orderBy: {
-                  order: 'asc'
-                }
-              }
-            }
-          })
-          
-          if (courseWithLinks?.links) {
-            courseLinks = courseWithLinks.links.map(link => ({
-              name: link.name,
-              url: link.url
-            }))
-          }
-        }
-        
         const calendarEvent = calendarService.scheduleEventToCalendarEvent(
           event,
-          weekStart,
-          courseLinks
+          weekStart
         )
 
         let calendarEventId: string

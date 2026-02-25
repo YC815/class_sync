@@ -183,8 +183,7 @@ export class GoogleCalendarService {
 
   scheduleEventToCalendarEvent(
     scheduleEvent: ScheduleEvent,
-    weekStart: Date,
-    courseLinks?: { name: string; url: string }[]
+    weekStart: Date
   ): CalendarEvent {
     console.log('🔄 [GoogleCalendar] Converting schedule event to calendar event:', {
       courseName: scheduleEvent.courseName,
@@ -249,17 +248,6 @@ export class GoogleCalendarService {
       description += `-${scheduleEvent.periodEnd}`
     }
     description += ' 節'
-
-    // 支援多連結格式：Calendar 顯示 "- 名稱: 連結"
-    if (courseLinks && courseLinks.length > 0) {
-      description += '\n\n課程連結：'
-      courseLinks.forEach(link => {
-        description += `\n- ${link.name}: ${link.url}`
-      })
-    } else if (scheduleEvent.url) {
-      // 向後相容：如果沒有多連結但有單一 URL
-      description += `\n\n課程連結：${scheduleEvent.url}`
-    }
 
     // 在描述末尾加入 JSON 元數據供程式讀取
     const metadata = {

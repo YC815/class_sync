@@ -16,7 +16,6 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select'
-import { Link } from 'lucide-react'
 import AddTempCourseDialog from './AddTempCourseDialog'
 import { 
   WeekSchedule, 
@@ -97,16 +96,12 @@ export default function ScheduleTable({
 
     const course = courses.find(c => c.id === cell.courseId)
     const displayName = cell.courseName || course?.name || '未知課程'
-    const hasLink = Boolean(cell.url || (course?.links && course.links.length > 0))
-    
+
     return (
       <div className="flex items-center gap-1">
         <span className="text-xs font-medium">
           {displayName}
         </span>
-        {hasLink && (
-          <Link className="w-3 h-3 text-blue-500" />
-        )}
       </div>
     )
   }
@@ -160,7 +155,6 @@ export default function ScheduleTable({
           data: {
             courseId: course.id,
             courseName: course.name,
-            url: course.links?.[0]?.url,
             base: currentCell?.base, // 保持基地選擇不變
             room: currentCell?.room, // 保持教室選擇不變
             placeId: currentCell?.placeId,

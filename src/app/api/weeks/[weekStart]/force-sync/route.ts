@@ -101,17 +101,6 @@ export async function POST(
           location = event.roomName
         }
 
-        let courseLinks: { name: string; url: string }[] = []
-        if (event.courseId) {
-          const courseWithLinks = await prisma.course.findUnique({
-            where: { id: event.courseId },
-            include: { links: { orderBy: { order: 'asc' } } }
-          })
-          if (courseWithLinks?.links) {
-            courseLinks = courseWithLinks.links.map(link => ({ name: link.name, url: link.url }))
-          }
-        }
-
         const scheduleEvent: ScheduleEvent = {
           weekday: event.weekday,
           periodStart: event.periodStart,
@@ -122,7 +111,7 @@ export async function POST(
           seriesId: event.seriesId || undefined,
         }
 
-        const calendarPayload = calendarService.scheduleEventToCalendarEvent(scheduleEvent, weekStart, courseLinks)
+        const calendarPayload = calendarService.scheduleEventToCalendarEvent(scheduleEvent, weekStart)
         const newCalendarEventId = await calendarService.createEvent(calendarPayload)
         await prisma.event.update({
           where: { id: event.id },

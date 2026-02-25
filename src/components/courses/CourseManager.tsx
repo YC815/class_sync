@@ -4,19 +4,17 @@ import { useState } from 'react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
-import { 
-  Table, 
-  TableBody, 
-  TableCell, 
-  TableHead, 
-  TableHeader, 
-  TableRow 
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow
 } from '@/components/ui/table'
 import {
   Dialog,
   DialogContent,
-  DialogDescription,
   DialogHeader,
   DialogTitle,
   DialogTrigger,
@@ -31,11 +29,10 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog'
-import { Plus, Edit2, Trash2, Link, Save, X } from 'lucide-react'
-import { Course, CourseLink } from '@/lib/types'
+import { Plus, Edit2, Trash2, Save } from 'lucide-react'
+import { Course } from '@/lib/types'
 import { useSession } from 'next-auth/react'
 import { toast } from 'sonner'
-import LinkNameSelect from './LinkNameSelect'
 
 interface CourseManagerProps {
   courses: Course[]
@@ -44,7 +41,6 @@ interface CourseManagerProps {
 
 interface CourseFormData {
   name: string
-  links: CourseLink[]
 }
 
 export default function CourseManager({ courses, onCoursesChange }: CourseManagerProps) {
@@ -52,7 +48,6 @@ export default function CourseManager({ courses, onCoursesChange }: CourseManage
   const [editingCourse, setEditingCourse] = useState<Course | null>(null)
   const [formData, setFormData] = useState<CourseFormData>({
     name: '',
-    links: [{ id: '', name: '', url: '', order: 0 }]
   })
   const { data: session } = useSession()
   const [isLoading, setIsLoading] = useState(false)
@@ -60,7 +55,7 @@ export default function CourseManager({ courses, onCoursesChange }: CourseManage
   const [courseToDelete, setCourseToDelete] = useState<string | null>(null)
 
   const resetForm = () => {
-    setFormData({ name: '', links: [{ id: '', name: '', url: '', order: 0 }] })
+    setFormData({ name: '' })
     setEditingCourse(null)
   }
 
@@ -71,12 +66,7 @@ export default function CourseManager({ courses, onCoursesChange }: CourseManage
 
   const openEditDialog = (course: Course) => {
     setEditingCourse(course)
-    setFormData({
-      name: course.name,
-      links: course.links && course.links.length > 0 
-        ? course.links.map(link => ({ ...link, id: link.id || '' }))
-        : [{ id: '', name: '', url: '', order: 0 }]
-    })
+    setFormData({ name: course.name })
     setIsDialogOpen(true)
   }
 
@@ -88,18 +78,7 @@ export default function CourseManager({ courses, onCoursesChange }: CourseManage
     setIsLoading(true)
     
     try {
-      const validLinks = formData.links.filter(link => 
-        link.name.trim() && link.url.trim()
-      ).map((link, index) => ({
-        name: link.name.trim(),
-        url: link.url.trim(),
-        order: index
-      }))
-
-      const courseData = {
-        name: formData.name.trim(),
-        links: validLinks.length > 0 ? validLinks : undefined
-      }
+      const courseData = { name: formData.name.trim() }
 
       let response
       if (editingCourse) {
@@ -183,7 +162,7 @@ export default function CourseManager({ courses, onCoursesChange }: CourseManage
       <div className="flex justify-between items-center">
         <div>
           <h2 className="text-2xl font-semibold">課程管理</h2>
-          <p className="text-muted-foreground">管理課程庫，設定預設連結</p>
+          <p className="text-muted-foreground">管理課程庫</p>
         </div>
         
         <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
@@ -198,9 +177,6 @@ export default function CourseManager({ courses, onCoursesChange }: CourseManage
               <DialogTitle>
                 {editingCourse ? '編輯課程' : '新增課程'}
               </DialogTitle>
-              <DialogDescription>
-                {editingCourse ? '編輯課程資訊及相關連結' : '建立新的課程並添加相關連結'}
-              </DialogDescription>
             </DialogHeader>
             <form onSubmit={handleSubmit} className="space-y-4">
               <div>
@@ -212,69 +188,6 @@ export default function CourseManager({ courses, onCoursesChange }: CourseManage
                   placeholder="輸入課程名稱"
                   required
                 />
-              </div>
-              
-              <div>
-                <Label>課程連結</Label>
-                <div className="space-y-3">
-                  {formData.links.map((link, index) => (
-                    <div key={index} className="flex gap-2 items-end">
-                      <div className="flex-1">
-                        <LinkNameSelect
-                          value={link.name}
-                          onChange={(newName) => {
-                            const newLinks = [...formData.links]
-                            newLinks[index].name = newName
-                            setFormData({ ...formData, links: newLinks })
-                          }}
-                          placeholder="選擇連結名稱"
-                        />
-                      </div>
-                      <div className="flex-1">
-                        <Input
-                          placeholder="連結網址"
-                          type="url"
-                          value={link.url}
-                          onChange={(e) => {
-                            const newLinks = [...formData.links]
-                            newLinks[index].url = e.target.value
-                            setFormData({ ...formData, links: newLinks })
-                          }}
-                        />
-                      </div>
-                      <Button
-                        type="button"
-                        variant="outline"
-                        size="sm"
-                        onClick={() => {
-                          if (formData.links.length > 1) {
-                            const newLinks = formData.links.filter((_, i) => i !== index)
-                            setFormData({ ...formData, links: newLinks })
-                          }
-                        }}
-                        disabled={formData.links.length === 1}
-                      >
-                        <X className="w-3 h-3" />
-                      </Button>
-                    </div>
-                  ))}
-                  
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="sm"
-                    onClick={() => {
-                      setFormData({
-                        ...formData,
-                        links: [...formData.links, { id: '', name: '', url: '', order: formData.links.length }]
-                      })
-                    }}
-                    className="w-full"
-                  >
-                    <Plus className="w-3 h-3 mr-1" />
-                    新增連結
-                  </Button>
-                </div>
               </div>
               
               <div className="flex justify-end gap-2">
@@ -301,7 +214,6 @@ export default function CourseManager({ courses, onCoursesChange }: CourseManage
           <TableHeader>
             <TableRow>
               <TableHead className="font-semibold">課程名稱</TableHead>
-              <TableHead className="font-semibold">連結</TableHead>
               <TableHead className="w-24 text-center font-semibold">操作</TableHead>
             </TableRow>
           </TableHeader>
@@ -310,30 +222,6 @@ export default function CourseManager({ courses, onCoursesChange }: CourseManage
               <TableRow key={course.id}>
                 <TableCell className="font-medium">
                   {course.name}
-                </TableCell>
-                <TableCell>
-                  {course.links && course.links.length > 0 ? (
-                    <div className="space-y-1">
-                      {course.links.map((link, index) => (
-                        <div key={link.id || index} className="flex items-center gap-2">
-                          <Link className="w-3 h-3 text-blue-500 flex-shrink-0" />
-                          <div className="flex-1 min-w-0">
-                            <span className="text-sm font-medium">{link.name}: </span>
-                            <a 
-                              href={link.url} 
-                              target="_blank" 
-                              rel="noopener noreferrer"
-                              className="text-sm text-blue-500 hover:underline"
-                            >
-                              {link.url}
-                            </a>
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  ) : (
-                    <span className="text-sm text-muted-foreground">無連結</span>
-                  )}
                 </TableCell>
                 <TableCell>
                   <div className="flex items-center justify-center gap-1">

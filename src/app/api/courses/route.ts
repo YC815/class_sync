@@ -19,13 +19,6 @@ export async function GET() {
       where: {
         userId: session.user.id
       },
-      include: {
-        links: {
-          orderBy: {
-            order: 'asc'
-          }
-        }
-      },
       orderBy: {
         createdAt: 'desc'
       }
@@ -95,8 +88,8 @@ export async function POST(request: NextRequest) {
 
     const body = await request.json()
     console.log('POST /api/courses - Request body:', body)
-    
-    const { name, links } = body
+
+    const { name } = body
 
     if (!name) {
       console.log('POST /api/courses - Missing name field')
@@ -106,26 +99,12 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    console.log('POST /api/courses - Creating course:', { name, linksCount: links?.length || 0 })
+    console.log('POST /api/courses - Creating course:', { name })
 
     const course = await prisma.course.create({
       data: {
         name,
         userId: session.user.id,
-        links: links && links.length > 0 ? {
-          create: links.map((link: { name: string; url: string }, index: number) => ({
-            name: link.name,
-            url: link.url,
-            order: index
-          }))
-        } : undefined
-      },
-      include: {
-        links: {
-          orderBy: {
-            order: 'asc'
-          }
-        }
       }
     })
 

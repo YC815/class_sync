@@ -23,7 +23,6 @@ model User {
   rooms   Room[]
   weeks   Week[]
   events  Event[]
-  linkTypes LinkType[]
 
   @@map("users")
 }
@@ -67,27 +66,13 @@ model Course {
   id        String   @id @default(cuid())
   userId    String   @map("user_id")
   name      String
-  links     CourseLink[]
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
-  
+
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
-  
+
   @@map("courses")
   @@index([userId])
-}
-
-model CourseLink {
-  id       String @id @default(cuid())
-  courseId String @map("course_id")
-  name     String
-  url      String
-  order    Int    @default(0)
-  
-  course Course @relation(fields: [courseId], references: [id], onDelete: Cascade)
-  
-  @@map("course_links")
-  @@index([courseId])
 }
 
 model Base {
@@ -173,16 +158,3 @@ model Event {
   @@index([seriesId])
 }
 
-model LinkType {
-  id        String   @id @default(cuid())
-  userId    String   @map("user_id")
-  name      String
-  isDefault Boolean  @default(false) @map("is_default")
-  createdAt DateTime @default(now()) @map("created_at")
-
-  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
-
-  @@unique([userId, name])
-  @@map("link_types")
-  @@index([userId])
-}

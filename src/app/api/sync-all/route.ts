@@ -112,21 +112,6 @@ export async function POST() {
             location = event.roomName
           }
 
-          // Load courseLinks if courseId exists
-          let courseLinks: { name: string; url: string }[] = []
-          if (event.courseId) {
-            const courseWithLinks = await prisma.course.findUnique({
-              where: { id: event.courseId },
-              include: { links: { orderBy: { order: 'asc' } } }
-            })
-            if (courseWithLinks?.links) {
-              courseLinks = courseWithLinks.links.map(link => ({
-                name: link.name,
-                url: link.url
-              }))
-            }
-          }
-
           // Build ScheduleEvent for calendar conversion
           const scheduleEvent: ScheduleEvent = {
             weekday: event.weekday,
@@ -140,8 +125,7 @@ export async function POST() {
 
           const calendarPayload = calendarService.scheduleEventToCalendarEvent(
             scheduleEvent,
-            weekStart,
-            courseLinks
+            weekStart
           )
 
           const slotKey = `${event.weekday}-${event.periodStart}-${event.periodEnd}`
@@ -157,8 +141,9 @@ export async function POST() {
               existingSummary === event.courseName
 
             if (sameCourse) {
-              // Same course at same slot — link DB record to existing Calendar event
-              console.log(`🔗 [SyncAll] Linking event ${event.id} to existing Calendar event ${existing.id}`)
+              // Same course at same slot — update Calendar event (pushes location/title changes), then link
+              console.log(`🔗 [SyncAll] Updating and linking event ${event.id} to existing Calendar event ${existing.id}`)
+              await calendarService.updateEvent(existing.id!, calendarPayload)
               await prisma.event.update({
                 where: { id: event.id },
                 data: { calendarEventId: existing.id! }

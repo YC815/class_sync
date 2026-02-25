@@ -18,8 +18,8 @@ export async function PATCH(
       )
     }
 
-    const { name, links } = await request.json()
-    
+    const { name } = await request.json()
+
     if (!name) {
       return NextResponse.json({ error: 'Name is required' }, { status: 400 })
     }
@@ -39,30 +39,9 @@ export async function PATCH(
       )
     }
 
-    // Delete existing links and create new ones
-    await prisma.courseLink.deleteMany({
-      where: { courseId: resolvedParams.id }
-    })
-
     const course = await prisma.course.update({
       where: { id: resolvedParams.id },
-      data: {
-        name,
-        links: links && links.length > 0 ? {
-          create: links.map((link: { name: string; url: string }, index: number) => ({
-            name: link.name,
-            url: link.url,
-            order: index
-          }))
-        } : undefined
-      },
-      include: {
-        links: {
-          orderBy: {
-            order: 'asc'
-          }
-        }
-      }
+      data: { name }
     })
 
     // 如果課程名稱有變更，更新相關的 Event 記錄

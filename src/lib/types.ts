@@ -1,23 +1,8 @@
-export interface CourseLink {
-  id: string
-  name: string
-  url: string
-  order?: number
-}
-
 export interface Course {
   id: string
   name: string
-  links?: CourseLink[]
   createdAt: Date
   updatedAt: Date
-}
-
-export interface LinkType {
-  id: string
-  name: string
-  isDefault: boolean
-  createdAt: Date
 }
 
 export interface Base {
@@ -44,7 +29,6 @@ export interface ScheduleCell {
   courseId?: string
   courseName?: string
   location?: string
-  url?: string
   isTemporary?: boolean
   isContinuation?: boolean // 是否為連堂課程
   venue?: string
@@ -69,7 +53,6 @@ export interface ScheduleEvent {
   courseId?: string
   courseName: string
   location?: string
-  url?: string
   seriesId?: string
   action?: 'create' | 'update' | 'delete'
 }
