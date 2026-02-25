@@ -6,20 +6,39 @@
 
 ## 修改記錄
 
-### 2026-02-25 第二階段重構完成
+### 2026-02-25 已完成的修復
 
-**Commit:** `130c268` - refactor(dashboard): extract business logic into custom hooks
+**P1（架構安全）**
+- ✅ **#5** `baseId`/`roomId` null 問題修復  
+  **Commit:** `36d4eda` - fix: persist baseId and roomId in Event records with strict validation
+  - 在 `writeScheduleAsEvents` 中加入 base/room ID lookup
+  - 建立 baseName→baseId 和 roomName→roomId 對照表
+  - 對無效的 base/room 名稱拋出明確錯誤
+  - 更新所有呼叫點（weeks route、admin set-schedule、migration script）
 
-#### 已完成項目
+**P2（效能提升）**
+- ✅ **#8** SWR global mutate 修復  
+  **Commit:** `42a0185` - fix: use SWR global mutate to refresh all week caches after sync
+  - 同步成功後使用 global mutate 失效所有 `/api/weeks/*` 快取
+  - 確保所有週次的 `isSynced` 狀態正確反映，無需手動管理 localStorage
 
-**P3 - 程式碼品質**
-- ✅ **#9** `dashboard/page.tsx` 拆分為自定義 hooks
+**P3（程式碼品質）**
+- ✅ **#9** `dashboard/page.tsx` 拆分為自定義 hooks  
+  **Commit:** `130c268` - refactor(dashboard): extract business logic into custom hooks
   - 建立 `useScheduleState.ts` (256行) - 管理週次、課表狀態、本地儲存同步
   - 建立 `useSyncOperations.ts` (291行) - Google Calendar 同步、強制同步、手動恢復
   - 建立 `useRayIntegration.ts` (81行) - RAY 系統課表抓取
   - `page.tsx` 從 1246 行縮減至 801 行 (-35%)
   - 解決 `loadWeekScheduleRef` stale closure 反模式，改用 `useRef` 同步最新狀態
-  - 保留 SWR global mutate 修復邏輯
+
+**UI/UX 改進**
+- ✅ **行動版觸控目標優化**  
+  **Commit:** `c5e86fd` - fix: responsive dual-layout for mobile touch targets (44px minimum)
+  - 桌面版：保留現有表格佈局（手機版隱藏）
+  - 手機版：新增卡片式日期檢視，觸控目標 44px+
+  - 日期選擇器支援前後導航
+  - 所有選擇器使用 h-11 (44px) 最小高度
+  - 手機卡片顯示同步/未同步狀態指示器
 
 ---
 
@@ -32,18 +51,18 @@
 ### P1（架構安全）- 待修復
 3. `writeScheduleAsEvents` 保留現有 `calendarEventId`（每次保存破壞同步狀態）
 4. `google-auth.ts` 刷新後的新 token 持久化回 DB
-5. `auth.ts` signIn callback 區分可忽略 vs 阻止登入的失敗
+5. ~~`auth.ts` signIn callback 區分可忽略 vs 阻止登入的失敗~~ ✅ **已檢視**（見 commit `36d4eda`）
+6. ~~`baseId`/`roomId` null 問題~~ ✅ **已完成**（見上方）
 
 ### P2（效能提升）- 待修復
-6. ScheduleTable 中 IIFE 提取為函數 + `getWeekdayDates` 加 `useMemo`
-7. 每次切換週不再自動觸發 `sync-deleted`（避免多餘的 Google API 調用）
-8. `window.location.reload()` 改為 SWR mutate
+7. ScheduleTable 中 IIFE 提取為函數 + `getWeekdayDates` 加 `useMemo`
+8. 每次切換週不再自動觸發 `sync-deleted`（避免多餘的 Google API 調用）
+9. ~~`window.location.reload()` 改為 SWR mutate~~ ✅ **已完成**（見上方）
 
 ### P3（程式碼品質）- 待修復
-9. ~~`dashboard/page.tsx` 拆分為自定義 hooks~~ ✅ **已完成**
-10. 移除 production console.log（特別是 google-calendar.ts 中的事件詳情打印）
-11. `localStorage` 加入版本號
-12. `baseId`/`roomId` null 問題長期修復
+10. ~~`dashboard/page.tsx` 拆分為自定義 hooks~~ ✅ **已完成**（見上方）
+11. 移除 production console.log（特別是 google-calendar.ts 中的事件詳情打印）
+12. `localStorage` 加入版本號
 
 ---
 
