@@ -4,6 +4,7 @@ import { prisma } from '@/lib/prisma'
 import { authOptions } from '@/lib/auth'
 import { WeekSchedule } from '@/lib/types'
 import { GoogleCalendarService } from '@/lib/google-calendar'
+import { ensureGoogleAccess, ReauthRequiredError } from '@/lib/google-auth'
 
 function formatDateLocal(date: Date): string {
   return date.toLocaleDateString('en-CA', { timeZone: 'Asia/Taipei' })
@@ -238,7 +239,27 @@ export async function GET(
     try {
       // 每次載入都先自動恢復 Google Calendar 事件
       console.log('🔄 [LoadSchedule] Starting automatic recovery from Google Calendar')
-      const accessToken = (session as { accessToken?: string }).accessToken
+      
+      // 確保 access token 有效（自動刷新過期的 token）
+      let accessToken: string | undefined
+      try {
+        if (session.accessToken && session.refreshToken && session.expiresAt) {
+          accessToken = await ensureGoogleAccess({
+            accessToken: session.accessToken,
+            refreshToken: session.refreshToken,
+            expiresAt: session.expiresAt
+          }, session.user.id)
+        }
+      } catch (error) {
+        if (error instanceof ReauthRequiredError) {
+          console.log('❌ [LoadSchedule] Token refresh failed, skipping auto-recovery:', error.message)
+          // 不回傳錯誤，讓使用者可以繼續使用本地課表
+          recoveryInfo = { recoveredEvents: 0, errors: ['Google Calendar 授權已過期，請重新登入以恢復同步功能'] }
+        } else {
+          throw error
+        }
+      }
+      
       if (accessToken) {
         try {
           recoveryInfo = await recoverEventsFromCalendar(userId, weekStart, accessToken)

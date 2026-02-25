@@ -72,12 +72,31 @@ export async function ensureGoogleAccess(tokenInfo: TokenInfo, userId?: string):
     console.log('✅ [Auth] Token refreshed successfully')
 
     if (userId) {
+      const updateData: {
+        access_token: string
+        expires_at: number
+        refresh_token?: string
+      } = {
+        access_token: refreshedTokens.access_token,
+        expires_at: Math.floor((Date.now() + refreshedTokens.expires_in * 1000) / 1000)
+      }
+      
+      // Google 很少返回新的 refresh_token，但如果返回了，必須保存
+      // 否則未來使用者的授權會默默失效（Silent Auth Failure）
+      if (refreshedTokens.refresh_token) {
+        console.log('🔄 [Auth] Google returned new refresh_token, updating database')
+        updateData.refresh_token = refreshedTokens.refresh_token
+      }
+      
       await prisma.account.updateMany({
         where: { userId, provider: 'google' },
-        data: {
-          access_token: refreshedTokens.access_token,
-          expires_at: Math.floor((Date.now() + refreshedTokens.expires_in * 1000) / 1000)
-        }
+        data: updateData
+      })
+      
+      console.log('✅ [Auth] Token persisted to database:', {
+        userId,
+        hasNewRefreshToken: !!refreshedTokens.refresh_token,
+        expiresAt: new Date(updateData.expires_at * 1000).toISOString()
       })
     }
 

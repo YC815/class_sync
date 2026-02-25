@@ -87,61 +87,23 @@ export const authOptions: NextAuthOptions = {
         })
       }
 
-      // Check if token is expired and refresh if needed
-      if (token.expiresAt && Date.now() < (token.expiresAt as number) * 1000) {
-        return token
-      }
-
-      // Token is expired, try to refresh it
-      if (token.refreshToken) {
-        try {
-          console.log('🔄 [Auth] Access token expired, refreshing...')
-          const response = await fetch('https://oauth2.googleapis.com/token', {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/x-www-form-urlencoded',
-            },
-            body: new URLSearchParams({
-              grant_type: 'refresh_token',
-              refresh_token: token.refreshToken as string,
-              client_id: process.env.GOOGLE_CLIENT_ID!,
-              client_secret: process.env.GOOGLE_CLIENT_SECRET!,
-            }),
-          })
-
-          if (response.ok) {
-            const refreshedTokens = await response.json()
-            console.log('✅ [Auth] Token refreshed successfully')
-
-            return {
-              ...token,
-              accessToken: refreshedTokens.access_token,
-              expiresAt: Math.floor(Date.now() / 1000) + refreshedTokens.expires_in,
-              refreshToken: refreshedTokens.refresh_token ?? token.refreshToken,
-            }
-          } else {
-            const errorData = await response.json().catch(() => ({}))
-            console.error('❌ [Auth] Failed to refresh token:', response.status, errorData)
-
-            // 如果是 invalid_grant 錯誤，清除 tokens
-            if (errorData.error === 'invalid_grant') {
-              console.log('❌ [Auth] Refresh token invalid, clearing tokens')
-              return {
-                ...token,
-                accessToken: null,
-                refreshToken: null,
-                expiresAt: null,
-                error: 'RefreshAccessTokenError'
-              }
-            }
-          }
-        } catch (error) {
-          console.error('❌ [Auth] Error refreshing token:', error)
+      // Check if token is expired
+      // Note: Token refresh is handled by ensureGoogleAccess() in API routes
+      // to maintain Single Source of Truth and avoid race conditions
+      if (token.expiresAt && Date.now() > (token.expiresAt as number) * 1000) {
+        // Token is expired
+        if (!token.refreshToken) {
+          // No refresh token available, mark error for frontend to handle
+          console.log('❌ [Auth] Token expired and no refresh token available')
           return {
             ...token,
             error: 'RefreshAccessTokenError'
           }
         }
+        
+        // Token expired but has refreshToken - let ensureGoogleAccess() handle it
+        // This avoids race conditions between JWT callback and API layer
+        console.log('⏳ [Auth] Token expired, will be refreshed in API layer via ensureGoogleAccess()')
       }
 
       return token

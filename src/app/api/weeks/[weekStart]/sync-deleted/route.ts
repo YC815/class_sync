@@ -3,6 +3,7 @@ import { getServerSession } from 'next-auth'
 import { prisma } from '@/lib/prisma'
 import { GoogleCalendarService } from '@/lib/google-calendar'
 import { authOptions } from '@/lib/auth'
+import { ensureGoogleAccess, ReauthRequiredError } from '@/lib/google-auth'
 
 // Enhanced matching algorithm for linking database events with calendar events
 function findMatchingCalendarEvent(dbEvent: any, calendarEvents: any[], weekStart: Date) {
@@ -81,12 +82,30 @@ export async function POST(
     
     console.log('🔄 [SyncDeleted] Starting sync for deleted events for week:', weekStartStr, 'userId:', userId)
 
-    // Get access token from session
-    const accessToken = (session as { accessToken?: string }).accessToken
-    
-    if (!accessToken) {
-      console.log('❌ [SyncDeleted] No access token available')
-      return NextResponse.json({ error: 'Google account not connected or token expired. Please sign out and sign in again.' }, { status: 401 })
+    // Ensure access token is valid (auto-refresh if expired)
+    let accessToken: string
+    try {
+      if (!session.accessToken || !session.refreshToken || !session.expiresAt) {
+        console.log('❌ [SyncDeleted] No access token available')
+        return NextResponse.json({ 
+          error: 'Google account not connected or token expired. Please sign out and sign in again.' 
+        }, { status: 401 })
+      }
+      
+      accessToken = await ensureGoogleAccess({
+        accessToken: session.accessToken,
+        refreshToken: session.refreshToken,
+        expiresAt: session.expiresAt
+      }, session.user.id)
+    } catch (error) {
+      if (error instanceof ReauthRequiredError) {
+        console.log('🔑 [SyncDeleted] OAuth token expired or invalid:', error.message)
+        return NextResponse.json({ 
+          error: 'Google Calendar access expired. Please sign out and sign in again to refresh your permissions.',
+          code: 'TOKEN_EXPIRED'
+        }, { status: 401 })
+      }
+      throw error
     }
 
     const calendarService = new GoogleCalendarService(accessToken)
