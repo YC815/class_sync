@@ -148,10 +148,10 @@ export function useScheduleState(): UseScheduleStateReturn {
                 const periodNum = parseInt(period)
                 const cell = data.schedule[dayNum][periodNum]
                 if (cell) {
-                  // 從服務器載入的數據標記為已同步
+                  // 從服務器載入的數據，依 calendarEventId 判斷是否已同步
                   daySchedule[periodNum] = {
                     ...cell,
-                    isSynced: true,
+                    isSynced: !!cell.calendarEventId,
                     calendarEventId: cell.calendarEventId
                   }
                 }

@@ -366,13 +366,13 @@ export default function ScheduleTable({
   const renderRoomSelect = (day: number, period: number, cell: ScheduleCell | null | undefined) => {
     if (!cell || !cell.base) {
       // 沒有課程或基地時保留空間但不顯示選擇器
-      return <div className="h-6"></div>
+      return <div className="h-11 sm:h-6"></div>
     }
     
     const base = bases.find(b => b.name === cell.base)
     if (!base || base.isSingleRoom || !base.rooms || base.rooms.length === 0) {
       // 單一教室基地或沒有教室時保留空間但不顯示選擇器
-      return <div className="h-6"></div>
+      return <div className="h-11 sm:h-6"></div>
     }
     
     return (
@@ -380,7 +380,7 @@ export default function ScheduleTable({
         value={cell.room || 'none'}
         onValueChange={(value) => handleRoomSelect(day, period, value)}
       >
-        <SelectTrigger className="w-full h-6 text-xs items-start">
+        <SelectTrigger className="w-full min-h-11 sm:h-6 text-xs items-start">
           <SelectValue placeholder="選擇教室" />
         </SelectTrigger>
         <SelectContent>
@@ -500,7 +500,7 @@ export default function ScheduleTable({
                             value={getCourseSelectValue(cell)}
                             onValueChange={(value) => handleCourseSelect(day, period, value)}
                           >
-                            <SelectTrigger className={`w-full h-auto min-h-8 text-xs items-start ${
+                            <SelectTrigger className={`w-full h-auto min-h-11 sm:min-h-8 text-xs items-start ${
                               cell?.isSynced
                                 ? 'border-green-300 bg-green-50'
                                 : cell
@@ -531,7 +531,7 @@ export default function ScheduleTable({
                               value={getBaseSelectValue(cell)}
                               onValueChange={(value) => handleBaseSelect(day, period, value)}
                             >
-                              <SelectTrigger className="w-full h-6 text-xs items-start">
+                              <SelectTrigger className="w-full min-h-11 sm:h-6 text-xs items-start">
                                 <SelectValue placeholder="選擇基地" />
                               </SelectTrigger>
                               <SelectContent>
@@ -544,7 +544,7 @@ export default function ScheduleTable({
                               </SelectContent>
                             </Select>
                           ) : (
-                            <div className="h-6"></div>
+                            <div className="h-11 sm:h-6"></div>
                           )}
                           
                           {/* 教室選擇 - 只在有課程且有基地時顯示，否則保留空間 */}
