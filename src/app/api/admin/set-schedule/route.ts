@@ -1,9 +1,60 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { timingSafeEqual } from 'crypto'
+import { PrismaClient } from '@/generated/prisma'
 import { prisma } from '@/lib/prisma'
 import { validateScheduleData } from '@/lib/schedule-utils'
 import { writeScheduleAsEvents } from '@/lib/schedule-writer'
-import type { WeekSchedule } from '@/lib/types'
+import type { WeekSchedule, ScheduleCell } from '@/lib/types'
+
+/**
+ * 確保 Ray 送來的 course/base/room 名稱都存在於 DB 中。
+ * 不存在的會被建立，讓下拉選單能正確顯示。
+ */
+async function ensureScheduleEntities(
+  userId: string,
+  schedule: WeekSchedule,
+  prismaClient: PrismaClient
+): Promise<void> {
+  const courseNames = new Set<string>()
+  const baseRoomMap = new Map<string, Set<string>>() // baseName → Set<roomName>
+
+  for (const dayData of Object.values(schedule)) {
+    if (!dayData) continue
+    for (const cell of Object.values(dayData)) {
+      const c = cell as ScheduleCell | null
+      if (!c) continue
+      if (c.courseName) courseNames.add(c.courseName)
+      if (c.base) {
+        if (!baseRoomMap.has(c.base)) baseRoomMap.set(c.base, new Set())
+        if (c.room) baseRoomMap.get(c.base)!.add(c.room)
+      }
+    }
+  }
+
+  // Upsert courses
+  for (const name of courseNames) {
+    const existing = await prismaClient.course.findFirst({ where: { userId, name } })
+    if (!existing) {
+      await prismaClient.course.create({ data: { userId, name } })
+    }
+  }
+
+  // Upsert bases and their rooms
+  for (const [baseName, roomNames] of baseRoomMap) {
+    let base = await prismaClient.base.findFirst({ where: { userId, name: baseName } })
+    if (!base) {
+      base = await prismaClient.base.create({
+        data: { userId, name: baseName, isSingleRoom: roomNames.size === 0 }
+      })
+    }
+    for (const roomName of roomNames) {
+      const existingRoom = await prismaClient.room.findFirst({ where: { baseId: base.id, name: roomName } })
+      if (!existingRoom) {
+        await prismaClient.room.create({ data: { userId, baseId: base.id, name: roomName } })
+      }
+    }
+  }
+}
 
 export const dynamic = 'force-dynamic'
 export const runtime = 'nodejs'
@@ -51,7 +102,10 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Invalid schedule data', errors }, { status: 400 })
     }
 
-    // 查詢使用者的 bases 和 rooms 用於 ID lookup
+    // 確保 Ray 送來的 course/base/room 名稱存在於 DB 中（不存在則建立）
+    await ensureScheduleEntities(userId, data as WeekSchedule, prisma)
+
+    // 重新查詢（含剛建立的新實體）
     const bases = await prisma.base.findMany({
       where: { userId },
       include: { rooms: true }

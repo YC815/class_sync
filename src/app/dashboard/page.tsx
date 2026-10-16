@@ -21,6 +21,7 @@ import UsageDialog from '@/components/help/UsageDialog'
 import { Course, Base } from '@/lib/types'
 import { useNavbarHeight } from '@/lib/hooks'
 import { fetcher } from '@/lib/fetcher'
+import { saveLocalSchedule } from '@/lib/local-schedule'
 import { toast } from 'sonner'
 import { HelpCircle, Loader2, Check, AlertCircle, Download } from 'lucide-react'
 import { useAuthErrorHandler } from '@/hooks/useAuthErrorHandler'
@@ -35,6 +36,7 @@ export default function Dashboard() {
   const { data: session, status } = useSession()
   const { authError, isModalOpen, handleAuthError, closeModal } = useAuthErrorHandler()
   const navbarRef = useRef<HTMLElement>(null!)
+  const debounceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   useNavbarHeight(navbarRef)
 
   // Custom Hooks
@@ -43,12 +45,6 @@ export default function Dashboard() {
     currentWeek: scheduleState.currentWeek,
     loadWeekSchedule: scheduleState.loadWeekSchedule,
   })
-  const rayIntegration = useRayIntegration({
-    currentWeek: scheduleState.currentWeek,
-    setSchedule: scheduleState.setSchedule,
-    markPendingChanges: scheduleState.markPendingChanges,
-  })
-
   // SWR Data Fetching
   const { data: courses = [], isLoading: isLoadingCourses, mutate: mutateCourses } = useSWR<Course[]>(
     session?.user?.id ? '/api/courses' : null,
@@ -58,6 +54,29 @@ export default function Dashboard() {
     session?.user?.id ? '/api/bases' : null,
     fetcher
   )
+
+  const rayIntegration = useRayIntegration({
+    onSuccess: async () => {
+      console.log('🔵 [RaySync] onSuccess fired — BEFORE mutate')
+      console.log('  currentWeek:', scheduleState.currentWeek?.toLocaleDateString('en-CA', { timeZone: 'Asia/Taipei' }))
+      console.log('  schedule (current):', JSON.parse(JSON.stringify(scheduleState.schedule)))
+      console.log('  bases (stale):', JSON.parse(JSON.stringify(bases)))
+      console.log('  courses (stale):', JSON.parse(JSON.stringify(courses)))
+
+      const [newBases, newCourses] = await Promise.all([
+        mutateBases(),
+        mutateCourses(),
+        scheduleState.currentWeek
+          ? scheduleState.loadWeekSchedule(scheduleState.currentWeek, false, false)
+          : Promise.resolve()
+      ])
+
+      console.log('🟢 [RaySync] AFTER mutate')
+      console.log('  bases (refreshed):', JSON.parse(JSON.stringify(newBases ?? [])))
+      console.log('  courses (refreshed):', JSON.parse(JSON.stringify(newCourses ?? [])))
+      // note: scheduleState.schedule here is stale (React state hasn't re-rendered yet)
+    }
+  })
 
   // Local UI State (not business logic)
   const [activeTab, setActiveTab] = useState('schedule')
@@ -69,6 +88,13 @@ export default function Dashboard() {
   const [showUsageDialog, setShowUsageDialog] = useState(false)
   const [showMobileMenu, setShowMobileMenu] = useState(false)
   const [showForceSyncModal, setShowForceSyncModal] = useState(false)
+
+  // Load schedule when week changes (or on initial mount)
+  useEffect(() => {
+    if (scheduleState.currentWeek && session?.user?.id) {
+      scheduleState.loadWeekSchedule(scheduleState.currentWeek)
+    }
+  }, [scheduleState.currentWeek, session?.user?.id]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // Close mobile menu when clicking outside
   useEffect(() => {
@@ -545,14 +571,19 @@ export default function Dashboard() {
 
                     if (scheduleState.currentWeek) {
                       const weekStartStr = scheduleState.currentWeek.toLocaleDateString('en-CA', { timeZone: 'Asia/Taipei' })
-                      setTimeout(() => {
+
+                      // 立即寫入 localStorage（write-through，防止 refresh 丟失編輯）
+                      saveLocalSchedule(weekStartStr, newSchedule)
+
+                      // 修正 debounce：取消前一個 timer 再設新的
+                      if (debounceTimerRef.current) {
+                        clearTimeout(debounceTimerRef.current)
+                      }
+                      debounceTimerRef.current = setTimeout(() => {
+                        debounceTimerRef.current = null
                         scheduleState.saveScheduleData(weekStartStr, newSchedule)
-                          .then(() => {
-                            scheduleState.clearPendingChanges()
-                          })
-                          .catch(() => {
-                            console.warn('保存失敗，保持本地變更')
-                          })
+                          .then(() => scheduleState.clearPendingChanges())
+                          .catch(() => console.warn('保存失敗，保持本地變更'))
                       }, 1000)
                     }
                   }}
@@ -773,7 +804,7 @@ export default function Dashboard() {
                   <AlertCircle className="w-5 h-5" />
                   抓取課表失敗
                 </DialogTitle>
-                <DialogDescription>請確認帳號格式或網路狀態後重試</DialogDescription>
+                <DialogDescription>請查看以下錯誤說明</DialogDescription>
               </DialogHeader>
               <div className="rounded-lg border border-red-200 bg-red-50 p-4">
                 <div className="text-sm text-red-700">{rayIntegration.rayMessage || '未知錯誤'}</div>

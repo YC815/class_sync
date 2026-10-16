@@ -137,7 +137,6 @@ export default function ScheduleTable({
         updateCell(day, period, {
           ...previousCell,
           isContinuation: true,
-          isSynced: false, // 連堂課程也標記為未同步
           calendarEventId: undefined
         })
       }
@@ -159,7 +158,6 @@ export default function ScheduleTable({
             room: currentCell?.room, // 保持教室選擇不變
             placeId: currentCell?.placeId,
             address: currentCell?.address,
-            isSynced: false, // 新選擇的課程標記為未同步
             calendarEventId: undefined
           }
         }
@@ -197,7 +195,6 @@ export default function ScheduleTable({
           room: undefined, // 重設教室選擇
           placeId: baseId === 'none' ? undefined : base?.placeId || undefined,
           address: baseId === 'none' ? undefined : base?.address || undefined,
-          isSynced: false, // 基地變更標記為未同步
           calendarEventId: undefined
         }
       }
@@ -229,7 +226,6 @@ export default function ScheduleTable({
         data: {
           ...currentCell,
           room: room === 'none' ? undefined : room,
-          isSynced: false, // 教室變更標記為未同步
           calendarEventId: undefined
         }
       }
@@ -258,7 +254,6 @@ export default function ScheduleTable({
       isTemporary: true,
       base: undefined,
       room: undefined,
-      isSynced: false, // 臨時課程標記為未同步
       calendarEventId: undefined
     })
   }
@@ -489,7 +484,7 @@ export default function ScheduleTable({
                       <TableCell key={`${day}-${period}`} className={`p-1 sm:p-2 h-20 align-top ${
                         isWeekend ? 'bg-gray-50' : ''
                       } ${
-                        cell?.isSynced
+                        !!cell?.calendarEventId
                           ? 'bg-green-50 border-l-4 border-green-400'
                           : cell
                             ? 'bg-yellow-50 border-l-4 border-yellow-400'
@@ -501,7 +496,7 @@ export default function ScheduleTable({
                             onValueChange={(value) => handleCourseSelect(day, period, value)}
                           >
                             <SelectTrigger className={`w-full h-auto min-h-11 sm:min-h-8 text-xs items-start ${
-                              cell?.isSynced
+                              !!cell?.calendarEventId
                                 ? 'border-green-300 bg-green-50'
                                 : cell
                                   ? 'border-yellow-300 bg-yellow-50 border-dashed'
@@ -645,12 +640,12 @@ export default function ScheduleTable({
             const isWeekend = selectedDay >= 6
             
             return (
-              <Card 
+              <Card
                 key={period}
                 className={`${
                   isWeekend ? 'bg-gray-50' : ''
                 } ${
-                  cell?.isSynced
+                  !!cell?.calendarEventId
                     ? 'border-l-4 border-l-green-400'
                     : cell
                       ? 'border-l-4 border-l-yellow-400'
@@ -665,10 +660,10 @@ export default function ScheduleTable({
                         {PERIOD_TIMES[period as keyof typeof PERIOD_TIMES]}
                       </span>
                     </div>
-                    {cell?.isSynced && (
+                    {!!cell?.calendarEventId && (
                       <span className="text-xs bg-green-100 text-green-700 px-2 py-1 rounded">已同步</span>
                     )}
-                    {cell && !cell.isSynced && (
+                    {cell && !cell.calendarEventId && (
                       <span className="text-xs bg-yellow-100 text-yellow-700 px-2 py-1 rounded">未同步</span>
                     )}
                   </div>
@@ -679,7 +674,7 @@ export default function ScheduleTable({
                     onValueChange={(value) => handleCourseSelect(selectedDay, period, value)}
                   >
                     <SelectTrigger className={`w-full h-11 text-sm ${
-                      cell?.isSynced
+                      !!cell?.calendarEventId
                         ? 'border-green-300 bg-green-50'
                         : cell
                           ? 'border-yellow-300 bg-yellow-50 border-dashed'

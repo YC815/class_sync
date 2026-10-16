@@ -29,11 +29,29 @@ export async function POST() {
 
   const studentId = email.split('@')[0]
 
-  const rayResponse = await fetch(`${rayUrl}/public/sync`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ userId: studentId, apiKey: rayApiSecret }),
-  })
+  let rayResponse: Response
+  try {
+    const controller = new AbortController()
+    const timeout = setTimeout(() => controller.abort(), 10_000)
+    try {
+      rayResponse = await fetch(`${rayUrl}/public/sync`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ userId: studentId, apiKey: rayApiSecret }),
+        signal: controller.signal,
+      })
+    } finally {
+      clearTimeout(timeout)
+    }
+  } catch (err) {
+    const isTimeout =
+      (err instanceof Error && err.name === 'AbortError') ||
+      (err instanceof Error && 'code' in err && (err as NodeJS.ErrnoException).code === 'ETIMEDOUT')
+    return NextResponse.json(
+      { message: isTimeout ? 'RAY 系統連線逾時，請稍後再試' : 'RAY 系統無法連線，請稍後再試' },
+      { status: 503 }
+    )
+  }
 
   const data = await rayResponse.json()
 

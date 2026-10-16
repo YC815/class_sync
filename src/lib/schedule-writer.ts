@@ -62,26 +62,11 @@ function scheduleToEvents(
 
       if (baseName) {
         baseId = baseNameToId.get(baseName) || null
-        if (!baseId) {
-          // 嚴格校驗：如果 baseName 存在但找不到對應 ID，拋出錯誤
-          throw new Error(
-            `Invalid base name "${baseName}" for event "${cell.courseName}". ` +
-            `Available bases: ${Array.from(baseNameToId.keys()).join(', ')}`
-          )
-        }
+        // 找不到對應 ID 時（例如校外參訪新地點），僅儲存名稱字串，不阻擋匯入
 
         if (roomName) {
           roomId = roomNameToId.get(`${baseName}-${roomName}`) || null
-          if (!roomId) {
-            // 嚴格校驗：如果 roomName 存在但找不到對應 ID，拋出錯誤
-            throw new Error(
-              `Invalid room name "${roomName}" in base "${baseName}" for event "${cell.courseName}". ` +
-              `Available rooms: ${Array.from(roomNameToId.keys())
-                .filter(k => k.startsWith(`${baseName}-`))
-                .map(k => k.replace(`${baseName}-`, ''))
-                .join(', ')}`
-            )
-          }
+          // 找不到對應 ID 時，僅儲存名稱字串
         }
       }
 

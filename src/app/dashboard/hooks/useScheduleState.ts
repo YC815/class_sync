@@ -148,10 +148,8 @@ export function useScheduleState(): UseScheduleStateReturn {
                 const periodNum = parseInt(period)
                 const cell = data.schedule[dayNum][periodNum]
                 if (cell) {
-                  // 從服務器載入的數據，依 calendarEventId 判斷是否已同步
                   daySchedule[periodNum] = {
                     ...cell,
-                    isSynced: !!cell.calendarEventId,
                     calendarEventId: cell.calendarEventId
                   }
                 }
@@ -160,30 +158,9 @@ export function useScheduleState(): UseScheduleStateReturn {
             }
           })
 
-          // 合併邏輯：保留本地未同步項目，服務器已同步項目優先
-          const mergedSchedule = { ...fullSchedule }
-
-          // 遍歷本地課表，保留未同步項目
-          Object.keys(localSchedule || {}).forEach(day => {
-            const dayNum = parseInt(day)
-            if (dayNum >= 1 && dayNum <= 7) {
-              Object.keys(localSchedule?.[dayNum] || {}).forEach(period => {
-                const periodNum = parseInt(period)
-                const currentCell = localSchedule?.[dayNum]?.[periodNum]
-                const serverCell = fullSchedule[dayNum]?.[periodNum]
-
-                if (currentCell && !currentCell.isSynced && !serverCell) {
-                  // 保留未同步的本地項目
-                  if (!mergedSchedule[dayNum]) mergedSchedule[dayNum] = {}
-                  mergedSchedule[dayNum][periodNum] = currentCell
-                }
-                // 服務器有同步項目時，優先使用服務器項目（已在上面設置）
-              })
-            }
-          })
-
-          setSchedule(mergedSchedule)
-          saveLocalSchedule(weekStartStr, mergedSchedule)
+          // DB 永遠是 source of truth，localStorage 只作為 instant paint 的 read 來源
+          setSchedule(fullSchedule)
+          saveLocalSchedule(weekStartStr, fullSchedule)
 
           console.log(`載入 ${weekStartStr} 週課表:`, data.totalEvents || Object.keys(data.schedule).length, '個時段')
         } else {
